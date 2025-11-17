@@ -14,6 +14,7 @@ import { FinancialTransactionsSection } from '@/components/StudentProfile/Financ
 import { AuditTrailSection } from '@/components/StudentProfile/AuditTrailSection';
 import { AttendanceRecordsSection } from '@/components/StudentProfile/AttendanceRecordsSection';
 import { Button } from '@/components/ui/button';
+import { getEgyptianDateString } from '@/utils/helpers';
 import { Save, X, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { validateStudentData, formatErrorMessage, ValidationError } from '@/utils/studentValidation';
@@ -103,7 +104,7 @@ const NewStudent = () => {
     academicNotes: '',
     strengths: '',
     weaknesses: '',
-    lastExamDate: new Date().toISOString().split('T')[0],
+    lastExamDate: getEgyptianDateString(),
   });
 
   // البيانات السلوكية
@@ -118,15 +119,15 @@ const NewStudent = () => {
     classroomBehavior: '',
     socialInteraction: '',
     counselorNotes: '',
-    lastIncidentDate: new Date().toISOString().split('T')[0],
+    lastIncidentDate: getEgyptianDateString(),
   });
 
   // البيانات الإدارية
   const [administrativeData, setAdministrativeData] = useState({
-    admissionDate: new Date().toISOString().split('T')[0],
+    admissionDate: getEgyptianDateString(),
     studentIdNumber: '',
     fileStatus: 'نشط' as 'نشط' | 'معطل' | 'مغلق' | 'معلق',
-    infoUpdateDate: new Date().toISOString().split('T')[0],
+    infoUpdateDate: getEgyptianDateString(),
     transportationStatus: 'لا يستخدم' as 'يستخدم' | 'لا يستخدم',
     busNumber: '',
     pickupPoint: '',
@@ -337,16 +338,36 @@ const NewStudent = () => {
       }
 
       // Save school fees
-      const { error: feesError } = await supabase
+      const { data: feesData, error: feesError } = await supabase
         .from('school_fees')
         .insert({
           student_id: newStudentId,
           total_amount: studentProfile.schoolFees.totalAmount,
           installment_count: studentProfile.schoolFees.installmentCount,
           advance_payment: studentProfile.schoolFees.advancePayment,
-        });
+        })
+        .select();
 
       if (feesError) throw feesError;
+
+      // Save fee installments
+      if (feesData && feesData.length > 0 && studentProfile.schoolFees.installments.length > 0) {
+        const feeId = feesData[0].id;
+        const { error: installmentsError } = await supabase
+          .from('fee_installments')
+          .insert(
+            studentProfile.schoolFees.installments.map(installment => ({
+              fee_id: feeId,
+              installment_number: installment.installmentNumber,
+              amount: installment.amount,
+              due_date: installment.dueDate,
+              paid: installment.paid || false,
+              paid_date: installment.paidDate || null,
+            }))
+          );
+
+        if (installmentsError) throw installmentsError;
+      }
 
       // Save other expenses
       if (studentProfile.otherExpenses.length > 0) {

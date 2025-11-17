@@ -339,3 +339,61 @@ export function readFile(file: File): Promise<string> {
         reader.readAsText(file);
     });
 }
+
+// الحصول على التاريخ والوقت المصري الحالي
+export function getEgyptianDate(): Date {
+    // التوقيت المصري هو EET (Eastern European Time) - Africa/Cairo
+    const now = new Date();
+    const egyptTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Africa/Cairo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    }).format(now);
+
+    // تحويل النص إلى كائن Date
+    const [datePart, timePart] = egyptTime.split(', ');
+    const [month, day, year] = datePart.split('/');
+    const [hour, minute, second] = timePart.split(':');
+
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute), parseInt(second));
+}
+
+// الحصول على تاريخ اليوم المصري بتنسيق YYYY-MM-DD
+export function getEgyptianDateString(): string {
+    const egyptDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Cairo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(new Date());
+
+    return egyptDate; // يعطي YYYY-MM-DD
+}
+
+// الحصول على الوقت المصري الحالي بتنسيق HH:MM
+export function getEgyptianTimeString(): string {
+    const egyptTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Africa/Cairo',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).format(new Date());
+
+    return egyptTime;
+}
+
+// الحصول على الشهر المصري الحالي بتنسيق YYYY-MM
+export function getEgyptianMonthString(): string {
+    const egyptDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Cairo',
+        year: 'numeric',
+        month: '2-digit'
+    }).format(new Date());
+
+    return egyptDate;
+}

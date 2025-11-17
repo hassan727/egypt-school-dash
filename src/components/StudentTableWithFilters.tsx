@@ -25,9 +25,9 @@ export const StudentTableWithFilters = ({
     sortable = true,
 }: StudentTableProps) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [stageFilter, setStageFilter] = useState('');
-    const [classFilter, setClassFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
+    const [stageFilter, setStageFilter] = useState('all');
+    const [classFilter, setClassFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
     const [sortField, setSortField] = useState('full_name_ar');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
@@ -44,9 +44,9 @@ export const StudentTableWithFilters = ({
             );
         }
 
-        if (stageFilter) result = result.filter((s) => s.stage === stageFilter);
-        if (classFilter) result = result.filter((s) => s.class === classFilter);
-        if (statusFilter) result = result.filter((s) => s.file_status === statusFilter);
+        if (stageFilter && stageFilter !== 'all') result = result.filter((s) => s.stage === stageFilter);
+        if (classFilter && classFilter !== 'all') result = result.filter((s) => s.class === classFilter);
+        if (statusFilter && statusFilter !== 'all') result = result.filter((s) => s.file_status === statusFilter);
 
         // ترتيب البيانات
         if (sortable) {
@@ -111,7 +111,7 @@ export const StudentTableWithFilters = ({
                             <SelectValue placeholder="الصف" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">الكل</SelectItem>
+                            <SelectItem value="all">الكل</SelectItem>
                             {stages.map((stage) => (
                                 <SelectItem key={stage} value={stage}>
                                     {stage}
@@ -127,7 +127,7 @@ export const StudentTableWithFilters = ({
                             <SelectValue placeholder="الفصل" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">الكل</SelectItem>
+                            <SelectItem value="all">الكل</SelectItem>
                             {classes.map((cls) => (
                                 <SelectItem key={cls} value={cls}>
                                     {cls}
@@ -143,7 +143,7 @@ export const StudentTableWithFilters = ({
                             <SelectValue placeholder="الحالة" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">الكل</SelectItem>
+                            <SelectItem value="all">الكل</SelectItem>
                             {statuses.map((status) => (
                                 <SelectItem key={status} value={status}>
                                     {status}
@@ -156,15 +156,15 @@ export const StudentTableWithFilters = ({
 
             {/* أزرار الإجراءات */}
             <div className="flex flex-wrap gap-2">
-                {(searchTerm || stageFilter || classFilter || statusFilter) && (
+                {(searchTerm || (stageFilter && stageFilter !== 'all') || (classFilter && classFilter !== 'all') || (statusFilter && statusFilter !== 'all')) && (
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
                             setSearchTerm('');
-                            setStageFilter('');
-                            setClassFilter('');
-                            setStatusFilter('');
+                            setStageFilter('all');
+                            setClassFilter('all');
+                            setStatusFilter('all');
                         }}
                     >
                         <X className="ml-2 h-4 w-4" />

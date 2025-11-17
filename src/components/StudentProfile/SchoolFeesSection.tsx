@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SchoolFees, OtherExpense, Installment } from '@/types/student';
 import { EXPENSE_TYPES, STAGES_DATA } from '@/data/studentConstants';
 import { Trash2, Plus } from 'lucide-react';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface SchoolFeesSectionProps {
     feesData?: SchoolFees;
@@ -65,7 +66,7 @@ export function SchoolFeesSection({
             expenseType: '',
             quantity: 1,
             totalPrice: 0,
-            date: new Date().toISOString().split('T')[0],
+            date: getEgyptianDateString(),
         }]
     );
 
@@ -409,7 +410,7 @@ export function SchoolFeesSection({
                 expenseType: '',
                 quantity: 1,
                 totalPrice: 0,
-                date: new Date().toISOString().split('T')[0],
+                date: getEgyptianDateString(),
             },
         ]);
     };

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader, Calendar, TrendingUp, AlertCircle, CheckCircle2, RotateCcw } from 'lucide-react';
 import { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { getEgyptianMonthString } from '@/utils/helpers';
 
 /**
  * صفحة إدارة الحضور
@@ -31,7 +32,7 @@ export default function AttendanceManagementPage() {
         undoLastChange,
     } = useStudentData(studentId || '');
 
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [selectedMonth, setSelectedMonth] = useState(getEgyptianMonthString());
 
     if (!studentId) {
         return (

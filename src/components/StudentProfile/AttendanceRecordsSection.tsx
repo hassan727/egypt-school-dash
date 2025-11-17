@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AttendanceRecord } from '@/types/student';
 import { Plus, Trash2 } from 'lucide-react';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface AttendanceRecordsSectionProps {
     data?: AttendanceRecord[];
@@ -27,7 +28,7 @@ export function AttendanceRecordsSection({
 
     const handleAddRecord = () => {
         const newRecord: AttendanceRecord = {
-            date: new Date().toISOString().split('T')[0],
+            date: getEgyptianDateString(),
             status: 'حاضر',
             checkInTime: '08:00',
             checkOutTime: '14:00',

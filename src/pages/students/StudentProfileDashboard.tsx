@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { AcademicSummaryCards } from '@/components/StudentProfile/AcademicSummaryCards';
+import { AcademicAuditLog } from '@/components/StudentProfile/AcademicAuditLog';
 
 /**
  * صفحة بروفايل الطالب - Dashboard الرئيسي
@@ -174,6 +175,11 @@ export function StudentProfileDashboard() {
             {/* Academic Summary Cards - Now Dynamic */}
             <div className="mb-6">
                 <AcademicSummaryCards studentId={studentId!} />
+            </div>
+
+            {/* Academic Audit Log */}
+            <div className="mb-6">
+                <AcademicAuditLog />
             </div>
 
             {/* شبكة البطاقات */}

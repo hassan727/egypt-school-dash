@@ -16,8 +16,10 @@ import {
     ASSESSMENT_WEIGHTS
 } from '@/data/studentConstants';
 import { Grade, GradeAuditLog } from '@/types/student';
+import { useAcademicAuditLog } from '@/hooks/useAcademicAuditLog';
 import { Plus, Save, Trash2, X, Clock, User, BookOpen, Calculator } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface GradeManagementFormProps {
     studentId: string;
@@ -26,20 +28,6 @@ interface GradeManagementFormProps {
     initialGrades?: Grade[];
 }
 
-/**
- * مكون إدارة الدرجات - المنطق الصحيح
- * 
- * سير العمل:
- * 1. المعلم يختار المادة من القائمة
- * 2. يختار نوع التقييم
- * 3. بناءً على النوع، تظهر dropdowns إضافية (شهر/ترم)
- * 4. يدخل الدرجة والملاحظات
- * 5. عند الحفظ، يتم:
- *    - تسجيل المعلم واسمه وتاريخ الإضافة
- *    - حساب الدرجة النهائية مع الأوزان
- *    - تحديث سجل التعديلات (Audit Log)
- *    - عرض منظم بالتواريخ والأوقات
- */
 export function GradeManagementForm({
     studentId,
     studentName = 'الطالب',
@@ -50,18 +38,25 @@ export function GradeManagementForm({
     const [auditLogs, setAuditLogs] = useState<GradeAuditLog[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
-    const [currentTeacher, setCurrentTeacher] = useState('أحمد محمد'); // اسم المعلم الحالي (يمكن تغييره)
+    const [currentTeacher, setCurrentTeacher] = useState('أحمد محمد');
     const [loading, setLoading] = useState(true);
 
-    // حالة النموذج الجديد
+    const { createAuditLog } = useAcademicAuditLog();
+
     const [newGrade, setNewGrade] = useState<Partial<Grade>>({
         subjectName: '',
         assessmentType: 'تقييم أسبوعي',
         originalGrade: 0,
         finalGrade: 0,
+        semester: 'الفصل الأول',
     });
 
-    // تحميل الدرجات من قاعدة البيانات عند تحميل المكون
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState('2025-2026');
+    const [selectedSemester, setSelectedSemester] = useState('الفصل الأول');
+    const [assessmentDate, setAssessmentDate] = useState('');
+    const [changeReason, setChangeReason] = useState('');
+    const [seatNumber, setSeatNumber] = useState('');
+
     useEffect(() => {
         const fetchGrades = async () => {
             try {
@@ -77,16 +72,17 @@ export function GradeManagementForm({
                 const formattedGrades: Grade[] = (data || []).map(grade => ({
                     id: grade.id,
                     studentId: grade.student_id,
-                    subjectName: grade.subject_name,
+                    academic_year_id: grade.academic_year_id,
+                    semester_id: grade.semester_id,
+                    subject_id: grade.subject_id,
+                    assessment_type_id: grade.assessment_type_id,
                     teacherName: grade.teacher_name,
-                    assessmentType: grade.assessment_type as any,
-                    month: grade.month,
-                    semester: grade.semester as 'الترم الأول' | 'الترم الثاني' | undefined,
+                    assessmentDate: grade.assessment_date,
+                    seatNumber: grade.seat_number,
                     originalGrade: grade.original_grade,
                     finalGrade: grade.final_grade,
-                    gradeLevel: grade.grade_level as 'ممتاز' | 'جيد جدًّا' | 'جيد' | 'مقبول' | 'ضعيف' | undefined,
+                    gradeLevel: grade.grade_level,
                     teacherNotes: grade.teacher_notes,
-                    weight: grade.weight,
                     createdAt: grade.created_at,
                     updatedAt: grade.updated_at,
                     createdBy: grade.created_by,
@@ -105,7 +101,41 @@ export function GradeManagementForm({
         }
     }, [studentId]);
 
-    // إعادة تعيين النموذج
+    const checkDateConflict = (date: string, subject: string): boolean => {
+        return grades.some(grade =>
+            grade.assessmentDate === date &&
+            grade.subjectName === subject &&
+            grade.studentId === studentId
+        );
+    };
+
+    const logAuditChange = async (
+        gradeId: string,
+        actionType: 'CREATE' | 'UPDATE' | 'DELETE',
+        fieldName?: string,
+        oldValue?: string,
+        newValue?: string,
+        reason?: string
+    ) => {
+        try {
+            const auditEntry = {
+                grade_id: gradeId,
+                student_id: studentId,
+                user_id: currentTeacher,
+                action_type: actionType,
+                field_name: fieldName,
+                old_value: oldValue,
+                new_value: newValue,
+                change_reason: reason,
+                change_timestamp: new Date().toISOString(),
+            };
+
+            console.log('تم تسجيل التغيير في سجل التدقيق:', auditEntry);
+        } catch (error) {
+            console.error('خطأ في تسجيل التدقيق:', error);
+        }
+    };
+
     const resetForm = () => {
         setNewGrade({
             subjectName: '',
@@ -113,12 +143,16 @@ export function GradeManagementForm({
             originalGrade: 0,
             finalGrade: 0,
             month: undefined,
-            semester: undefined,
+            semester: 'الفصل الأول',
             teacherNotes: '',
         });
+        setSelectedAcademicYear('2025-2026');
+        setSelectedSemester('الفصل الأول');
+        setAssessmentDate('');
+        setChangeReason('');
+        setSeatNumber('');
     };
 
-    // معالجة تغيير المادة
     const handleSubjectChange = (subject: string) => {
         setNewGrade(prev => ({
             ...prev,
@@ -126,17 +160,16 @@ export function GradeManagementForm({
         }));
     };
 
-    // معالجة تغيير نوع التقييم
     const handleAssessmentTypeChange = (type: string) => {
+        const isSemesterBased = type === 'اختبار الفصل الدراسي الأول' || type === 'اختبار نهاية العام الدراسي';
         setNewGrade(prev => ({
             ...prev,
             assessmentType: type as any,
             month: undefined,
-            semester: undefined,
+            semester: isSemesterBased ? (prev.semester || selectedSemester) : undefined,
         }));
     };
 
-    // معالجة تغيير الدرجة
     const handleGradeChange = (grade: number) => {
         const gradeLevel = calculateGradeLevel(grade);
         setNewGrade(prev => ({
@@ -148,25 +181,42 @@ export function GradeManagementForm({
         }));
     };
 
-    // إضافة درجة جديدة
     const handleAddGrade = async () => {
         if (!newGrade.subjectName || newGrade.originalGrade === undefined) {
             alert('يرجى ملء جميع الحقول المطلوبة');
             return;
         }
 
-        // التحقق من الحقول التفاعلية
+        if (!assessmentDate) {
+            alert('يرجى تحديد تاريخ التقييم');
+            return;
+        }
+
+        if (checkDateConflict(assessmentDate, newGrade.subjectName)) {
+            alert('يوجد تقييم آخر في نفس التاريخ لهذه المادة! يرجى اختيار تاريخ مختلف.');
+            return;
+        }
+
         if (newGrade.assessmentType === 'تقييم شهري' && !newGrade.month) {
             alert('يرجى اختيار الشهر');
             return;
         }
 
         if (
-            (newGrade.assessmentType === 'امتحان منتصف الفصل' ||
-                newGrade.assessmentType === 'امتحان نهاية الفصل') &&
+            (newGrade.assessmentType === 'اختبار الفصل الدراسي الأول' ||
+                newGrade.assessmentType === 'اختبار نهاية العام الدراسي') &&
             !newGrade.semester
         ) {
-            alert('يرجى اختيار الترم');
+            alert('يرجى اختيار الفصل');
+            return;
+        }
+
+        if (
+            (newGrade.assessmentType === 'اختبار الفصل الدراسي الأول' ||
+                newGrade.assessmentType === 'اختبار نهاية العام الدراسي') &&
+            !seatNumber.trim()
+        ) {
+            alert('يرجى إدخال رقم الجلوس');
             return;
         }
 
@@ -181,57 +231,115 @@ export function GradeManagementForm({
         });
 
         try {
-            // حفظ الدرجة في قاعدة البيانات
+            const { data: academicYearData, error: yearError } = await supabase
+                .from('academic_years')
+                .select('id')
+                .eq('year_code', selectedAcademicYear)
+                .single();
+
+            if (yearError || !academicYearData) {
+                alert('لم يتم العثور على السنة الدراسية. يرجى إنشاء السنة الدراسية أولاً.');
+                return;
+            }
+
+            const { data: semesterData, error: semesterError } = await supabase
+                .from('semesters')
+                .select('id')
+                .eq('semester_name_ar', newGrade.semester)
+                .eq('academic_year_id', academicYearData.id)
+                .single();
+
+            if (semesterError || !semesterData) {
+                alert('لم يتم العثور على الفصل الدراسي. يرجى إنشاء الفصل أولاً.');
+                return;
+            }
+
+            const { data: subjectData, error: subjectError } = await supabase
+                .from('subjects')
+                .select('id')
+                .eq('subject_name_ar', newGrade.subjectName)
+                .single();
+
+            if (subjectError || !subjectData) {
+                alert('لم يتم العثور على المادة. يرجى إنشاء المادة أولاً.');
+                return;
+            }
+
+            const { data: assessmentTypeData, error: assessmentError } = await supabase
+                .from('assessment_types')
+                .select('id')
+                .eq('assessment_name_ar', newGrade.assessmentType)
+                .single();
+
+            if (assessmentError || !assessmentTypeData) {
+                alert('لم يتم العثور على نوع التقييم. يرجى إنشاء نوع التقييم أولاً.');
+                return;
+            }
+
             const { data, error } = await supabase
                 .from('grades')
                 .insert([{
                     student_id: studentId,
-                    subject_name: newGrade.subjectName,
+                    academic_year_id: academicYearData.id,
+                    semester_id: semesterData.id,
+                    subject_id: subjectData.id,
+                    assessment_type_id: assessmentTypeData.id,
                     teacher_name: currentTeacher,
-                    assessment_type: newGrade.assessmentType,
-                    month: newGrade.month,
-                    semester: newGrade.semester,
+                    assessment_date: assessmentDate,
+                    seat_number: (newGrade.assessmentType === 'اختبار الفصل الدراسي الأول' ||
+                                 newGrade.assessmentType === 'اختبار نهاية العام الدراسي') ? seatNumber : null,
                     original_grade: newGrade.originalGrade,
-                    final_grade: newGrade.originalGrade, // الدرجة النهائية تساوي الأصلية عند الإدخال
+                    final_grade: newGrade.originalGrade,
                     grade_level: newGrade.gradeLevel,
                     teacher_notes: newGrade.teacherNotes,
-                    weight: ASSESSMENT_WEIGHTS[newGrade.assessmentType as string] || 0.1,
                     created_by: currentTeacher,
                 }])
                 .select();
 
             if (error) throw error;
 
-            // تنسيق الدرجة المُدخلة
             const gradeEntry: Grade = {
                 id: data[0].id,
                 studentId: data[0].student_id,
-                subjectName: data[0].subject_name,
+                academic_year_id: data[0].academic_year_id,
+                semester_id: data[0].semester_id,
+                subject_id: data[0].subject_id,
+                assessment_type_id: data[0].assessment_type_id,
+                subjectName: newGrade.subjectName,
+                assessmentType: newGrade.assessmentType as any,
                 teacherName: data[0].teacher_name,
-                assessmentType: data[0].assessment_type as any,
-                month: data[0].month,
-                semester: data[0].semester as 'الترم الأول' | 'الترم الثاني' | undefined,
+                assessmentDate: data[0].assessment_date,
+                seatNumber: data[0].seat_number,
                 originalGrade: data[0].original_grade,
                 finalGrade: data[0].final_grade,
                 gradeLevel: data[0].grade_level as 'ممتاز' | 'جيد جدًّا' | 'جيد' | 'مقبول' | 'ضعيف' | undefined,
                 teacherNotes: data[0].teacher_notes,
-                weight: data[0].weight,
                 createdAt: data[0].created_at,
                 updatedAt: data[0].updated_at,
                 createdBy: data[0].created_by,
             };
 
-            // إنشاء سجل تعديل (Audit Log)
+            await createAuditLog(
+                studentId,
+                gradeEntry.id || '',
+                currentTeacher,
+                'CREATE',
+                undefined,
+                undefined,
+                gradeEntry.finalGrade.toString(),
+                'إنشاء تقييم جديد'
+            );
+
             const auditEntry: GradeAuditLog = {
                 id: `audit_${Date.now()}`,
                 gradeId: gradeEntry.id || '',
                 studentId,
-                subjectName: gradeEntry.subjectName,
+                subjectName: newGrade.subjectName,
                 actionType: 'إضافة',
                 teacherName: currentTeacher,
                 newValue: gradeEntry.finalGrade,
                 timestamp: formattedDate,
-                notes: `أضاف درجة ${gradeEntry.assessmentType}${gradeEntry.month ? ` (${gradeEntry.month})` : ''}${gradeEntry.semester ? ` (${gradeEntry.semester})` : ''} بقيمة ${gradeEntry.finalGrade}/100`,
+                notes: `أضاف درجة ${newGrade.assessmentType}${newGrade.month ? ` (${newGrade.month})` : ''}${newGrade.semester ? ` (${newGrade.semester})` : ''} بقيمة ${gradeEntry.finalGrade}/100`,
             };
 
             const updatedGrades = [...grades, gradeEntry];
@@ -240,7 +348,6 @@ export function GradeManagementForm({
             setGrades(updatedGrades);
             setAuditLogs(updatedAuditLogs);
 
-            // تحديث السجلات الأكاديمية للطالب
             await updateStudentAcademicRecord(studentId, updatedGrades);
 
             resetForm();
@@ -251,10 +358,8 @@ export function GradeManagementForm({
         }
     };
 
-    // تحديث السجلات الأكاديمية للطالب بناءً على الدرجات
     const updateStudentAcademicRecord = async (studentId: string, studentGrades: Grade[]) => {
         try {
-            // حساب متوسط الدرجات وGPA
             const subjects = [...new Set(studentGrades.map(g => g.subjectName))];
             let totalFinalGrade = 0;
             let subjectCount = 0;
@@ -269,12 +374,10 @@ export function GradeManagementForm({
             });
 
             const averageMarks = subjectCount > 0 ? totalFinalGrade / subjectCount : 0;
-            const currentGPA = Math.min(4.0, Math.max(0, (averageMarks / 100) * 4)); // تحويل إلى نظام 4.0
-            
-            // تحديد حالة النجاح
+            const currentGPA = Math.min(4.0, Math.max(0, (averageMarks / 100) * 4));
+
             const passingStatus = averageMarks >= 60 ? 'ناجح' : 'راسب';
 
-            // تحديث السجل الأكاديمي
             const { error: academicError } = await supabase
                 .from('academic_records')
                 .upsert({
@@ -283,21 +386,93 @@ export function GradeManagementForm({
                     average_marks: parseFloat(averageMarks.toFixed(2)),
                     total_marks: parseFloat(totalFinalGrade.toFixed(2)),
                     passing_status: passingStatus,
-                    last_exam_date: new Date().toISOString().split('T')[0],
+                    last_exam_date: getEgyptianDateString(),
                 });
 
             if (academicError) throw academicError;
+
+            if (passingStatus === 'ناجح' && subjectCount >= 3) {
+                await generateCertificateIfNeeded(studentId, selectedAcademicYear, averageMarks, currentGPA, passingStatus);
+            }
         } catch (err) {
             console.error('خطأ في تحديث السجل الأكاديمي:', err);
         }
     };
 
-    // حذف درجة
+    const generateCertificateIfNeeded = async (
+        studentId: string,
+        academicYear: string,
+        averageMarks: number,
+        gpa: number,
+        passingStatus: string
+    ) => {
+        try {
+            const { data: existingCertificate, error: checkError } = await supabase
+                .from('certificates')
+                .select('id')
+                .eq('student_id', studentId)
+                .eq('academic_year', academicYear)
+                .eq('certificate_type', 'تقدير نهائي')
+                .single();
+
+            if (checkError && checkError.code !== 'PGRST116') {
+                console.error('خطأ في التحقق من الشهادة الموجودة:', checkError);
+                return;
+            }
+
+            if (existingCertificate) {
+                console.log('الشهادة موجودة بالفعل لهذا العام الدراسي');
+                return;
+            }
+
+            const { data: studentData, error: studentError } = await supabase
+                .from('students')
+                .select('full_name_ar, stage, class')
+                .eq('student_id', studentId)
+                .single();
+
+            if (studentError) throw studentError;
+
+            let gradeLevel = 'ضعيف';
+            if (averageMarks >= 90) gradeLevel = 'ممتاز';
+            else if (averageMarks >= 80) gradeLevel = 'جيد جدًّا';
+            else if (averageMarks >= 70) gradeLevel = 'جيد';
+            else if (averageMarks >= 60) gradeLevel = 'مقبول';
+
+            const certificateNumber = `CERT-${studentId}-${academicYear.replace('/', '-')}-${Date.now().toString().slice(-4)}`;
+
+            const { error: certError } = await supabase
+                .from('certificates')
+                .insert({
+                    student_id: studentId,
+                    certificate_type: 'تقدير نهائي',
+                    academic_year: academicYear,
+                    stage: studentData.stage,
+                    class: studentData.class,
+                    issue_date: getEgyptianDateString(),
+                    overall_grade: parseFloat(averageMarks.toFixed(2)),
+                    overall_gpa: parseFloat(gpa.toFixed(2)),
+                    grade_level: gradeLevel,
+                    status: 'صالح',
+                    issued_by: currentTeacher,
+                    certificate_number: certificateNumber,
+                    notes: `شهادة تقدير نهائي للعام الدراسي ${academicYear} - ${studentData.full_name_ar}`
+                });
+
+            if (certError) {
+                console.error('خطأ في إنشاء الشهادة:', certError);
+            } else {
+                console.log('تم إنشاء الشهادة بنجاح:', certificateNumber);
+            }
+        } catch (err) {
+            console.error('خطأ في إنشاء الشهادة:', err);
+        }
+    };
+
     const handleDeleteGrade = async (gradeId: string | undefined) => {
         if (!gradeId) return;
 
         try {
-            // حذف الدرجة من قاعدة البيانات
             const { error } = await supabase
                 .from('grades')
                 .delete()
@@ -308,8 +483,18 @@ export function GradeManagementForm({
             const gradeToDelete = grades.find(g => g.id === gradeId);
             const updatedGrades = grades.filter(g => g.id !== gradeId);
 
-            // إنشاء سجل حذف
             if (gradeToDelete) {
+                await createAuditLog(
+                    studentId,
+                    gradeId,
+                    currentTeacher,
+                    'DELETE',
+                    undefined,
+                    gradeToDelete.finalGrade.toString(),
+                    undefined,
+                    `حذف تقييم ${gradeToDelete.assessmentType}`
+                );
+
                 const now = new Date();
                 const formattedDate = now.toLocaleString('ar-EG', {
                     year: 'numeric',
@@ -337,7 +522,6 @@ export function GradeManagementForm({
 
             setGrades(updatedGrades);
 
-            // تحديث السجلات الأكاديمية للطالب
             await updateStudentAcademicRecord(studentId, updatedGrades);
         } catch (error) {
             console.error('خطأ في حذف الدرجة:', error);
@@ -345,7 +529,6 @@ export function GradeManagementForm({
         }
     };
 
-    // تجميع الدرجات حسب المادة
     const gradesBySubject = grades.reduce((acc, grade) => {
         const subject = grade.subjectName;
         if (!acc[subject]) {
@@ -355,12 +538,10 @@ export function GradeManagementForm({
         return acc;
     }, {} as Record<string, Grade[]>);
 
-    // حساب الدرجة النهائية لكل مادة مع الأوزان
     const calculateSubjectFinalGrade = (subjectGrades: Grade[]): number => {
         return calculateWeightedFinalGrade(subjectGrades);
     };
 
-    // تنسيق التاريخ والوقت للعرض
     const formatDateTime = (isoString?: string): string => {
         if (!isoString) return '-';
         try {
@@ -378,11 +559,9 @@ export function GradeManagementForm({
         }
     };
 
-    // بناء وصف نوع التقييم مع التفاصيل
     const getAssessmentDescription = (grade: Grade): string => {
-        let desc = grade.assessmentType;
+        let desc = grade.assessmentType || 'تقييم';
         if (grade.month) desc += ` (${grade.month})`;
-        if (grade.semester) desc += ` (${grade.semester})`;
         return desc;
     };
 
@@ -394,7 +573,6 @@ export function GradeManagementForm({
         );
     }
 
-    // حساب الإحصائيات العامة
     const subjects = Object.keys(gradesBySubject);
     const totalSubjects = subjects.length;
     let totalAverage = 0;
@@ -413,7 +591,6 @@ export function GradeManagementForm({
 
     return (
         <div className="space-y-6">
-            {/* معلومات الطالب الحالية */}
             <Card className="p-4 bg-blue-50 border border-blue-200">
                 <div className="flex items-center gap-4">
                     <div className="flex-1">
@@ -437,7 +614,6 @@ export function GradeManagementForm({
                 </div>
             </Card>
 
-            {/* ملخص الأداء الأكاديمي */}
             {totalSubjects > 0 && (
                 <Card className="p-6 bg-gradient-to-r from-green-50 to-blue-50 border border-green-200">
                     <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -465,7 +641,6 @@ export function GradeManagementForm({
                 </Card>
             )}
 
-            {/* زر إضافة درجة جديدة */}
             {!showForm && (
                 <Button
                     onClick={() => setShowForm(true)}
@@ -476,7 +651,6 @@ export function GradeManagementForm({
                 </Button>
             )}
 
-            {/* نموذج إضافة درجة جديدة */}
             {showForm && (
                 <Card className="p-6 bg-white border border-green-200 shadow-lg">
                     <div className="flex justify-between items-center mb-6">
@@ -493,7 +667,40 @@ export function GradeManagementForm({
                     </div>
 
                     <div className="space-y-6">
-                        {/* الخطوة 1: اختيار المادة */}
+                        <div>
+                            <Label className="block text-sm font-semibold text-gray-700 mb-3">
+                                📅 السنة الدراسية
+                            </Label>
+                            <Select value={selectedAcademicYear} onValueChange={setSelectedAcademicYear}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="اختر السنة الدراسية..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="2024-2025">2024-2025</SelectItem>
+                                    <SelectItem value="2025-2026">2025-2026</SelectItem>
+                                    <SelectItem value="2026-2027">2026-2027</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <Label className="block text-sm font-semibold text-gray-700 mb-3">
+                                📆 الفصل الدراسي
+                            </Label>
+                            <Select value={selectedSemester} onValueChange={(value) => {
+                                setSelectedSemester(value);
+                                setNewGrade(prev => ({ ...prev, semester: value as 'الفصل الأول' | 'الفصل الثاني' }));
+                            }}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="اختر الفصل الدراسي..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="الفصل الأول">الفصل الأول</SelectItem>
+                                    <SelectItem value="الفصل الثاني">الفصل الثاني</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
                         <div>
                             <Label className="block text-sm font-semibold text-gray-700 mb-3">
                                 🎓 المادة الدراسية
@@ -513,7 +720,6 @@ export function GradeManagementForm({
 
                         </div>
 
-                        {/* الخطوة 2: اختيار نوع التقييم */}
                         {newGrade.subjectName && (
                             <div>
                                 <Label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -537,7 +743,6 @@ export function GradeManagementForm({
                             </div>
                         )}
 
-                        {/* الخطوة 3: الحقول التفاعلية بناءً على نوع التقييم */}
                         {newGrade.subjectName && newGrade.assessmentType === 'تقييم شهري' && (
                             <div>
                                 <Label className="block text-sm font-semibold text-gray-700 mb-3">
@@ -561,34 +766,74 @@ export function GradeManagementForm({
                         )}
 
                         {newGrade.subjectName &&
-                            (newGrade.assessmentType === 'امتحان منتصف الفصل' ||
-                                newGrade.assessmentType === 'امتحان نهاية الفصل') && (
-                                <div>
-                                    <Label className="block text-sm font-semibold text-gray-700 mb-3">
-                                        📅 الترم الدراسي
-                                    </Label>
-                                    <Select value={newGrade.semester || ''} onValueChange={(semester) =>
-                                        setNewGrade(prev => ({
-                                            ...prev,
-                                            semester: semester as 'الترم الأول' | 'الترم الثاني',
-                                        }))
-                                    }>
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue placeholder="اختر الترم..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {SEMESTERS.map(semester => (
-                                                <SelectItem key={semester} value={semester}>
-                                                    {semester}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                            (newGrade.assessmentType === 'اختبار الفصل الدراسي الأول' ||
+                                newGrade.assessmentType === 'اختبار نهاية العام الدراسي') && (
+                                <>
+                                    <div>
+                                        <Label className="block text-sm font-semibold text-gray-700 mb-3">
+                                            📅 الترم الدراسي
+                                        </Label>
+                                        <Select value={newGrade.semester || ''} onValueChange={(semester) =>
+                                            setNewGrade(prev => ({
+                                                ...prev,
+                                                semester: semester as 'الترم الأول' | 'الترم الثاني',
+                                            }))
+                                        }>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="اختر الترم..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {SEMESTERS.map(semester => (
+                                                    <SelectItem key={semester} value={semester}>
+                                                        {semester}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="seatNumber" className="block text-sm font-semibold text-gray-700 mb-3">
+                                            🪑 رقم الجلوس
+                                        </Label>
+                                        <Input
+                                            id="seatNumber"
+                                            type="text"
+                                            value={seatNumber}
+                                            onChange={(e) => setSeatNumber(e.target.value)}
+                                            placeholder="أدخل رقم جلوس الطالب"
+                                            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            رقم الجلوس ثابت للطالب في الفصلين الدراسيين
+                                        </p>
+                                    </div>
+                                </>
                             )}
 
-                        {/* الخطوة 4: إدخال الدرجة */}
                         {newGrade.subjectName && (
+                            <div>
+                                <Label htmlFor="assessmentDate" className="block text-sm font-semibold text-gray-700 mb-3">
+                                    📅 تاريخ التقييم
+                                </Label>
+                                <Input
+                                    id="assessmentDate"
+                                    type="date"
+                                    value={assessmentDate}
+                                    onChange={(e) => setAssessmentDate(e.target.value)}
+                                    min={selectedAcademicYear === '2025-2026' ? '2025-09-01' : '2024-09-01'}
+                                    max={selectedAcademicYear === '2025-2026' ? '2026-06-30' : '2025-06-30'}
+                                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                />
+                                {assessmentDate && checkDateConflict(assessmentDate, newGrade.subjectName) && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        ⚠️ يوجد تقييم آخر في نفس التاريخ لهذه المادة!
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {newGrade.subjectName && assessmentDate && (
                             <div>
                                 <Label htmlFor="grade" className="block text-sm font-semibold text-gray-700 mb-3">
                                     📊 الدرجة (من 100)
@@ -613,8 +858,12 @@ export function GradeManagementForm({
                             </div>
                         )}
 
-                        {/* ملاحظات المعلم */}
-                        {newGrade.subjectName && (
+                        {newGrade.subjectName && assessmentDate && (
+                            <div>
+                            </div>
+                        )}
+
+                        {newGrade.subjectName && assessmentDate && (
                             <div>
                                 <Label htmlFor="notes" className="block text-sm font-semibold text-gray-700 mb-3">
                                     💬 ملاحظات المعلم (اختيارية)
@@ -630,8 +879,7 @@ export function GradeManagementForm({
                             </div>
                         )}
 
-                        {/* أزرار الحفظ والإلغاء */}
-                        {newGrade.subjectName && (
+                        {newGrade.subjectName && assessmentDate && (
                             <div className="flex gap-3 justify-end">
                                 <Button
                                     onClick={() => {
@@ -656,7 +904,6 @@ export function GradeManagementForm({
                 </Card>
             )}
 
-            {/* عرض الدرجات مجمعة حسب المادة */}
             {Object.keys(gradesBySubject).length > 0 ? (
                 <div className="space-y-4">
                     <h3 className="text-lg font-bold text-gray-800 mb-4">📚 الدرجات حسب المادة</h3>
@@ -668,7 +915,6 @@ export function GradeManagementForm({
 
                         return (
                             <Card key={subjectName} className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200">
-                                {/* رأس المادة */}
                                 <div className="mb-6 pb-4 border-b border-blue-200">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
@@ -698,7 +944,6 @@ export function GradeManagementForm({
                                     </p>
                                 </div>
 
-                                {/* جدول الدرجات الفردية */}
                                 <div className="overflow-x-auto">
                                     <Table>
                                         <TableHeader>
@@ -719,7 +964,7 @@ export function GradeManagementForm({
                                                     <TableCell className="font-medium">{grade.assessmentType}</TableCell>
                                                     <TableCell>
                                                         {grade.month && <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1">شهر: {grade.month}</span>}
-                                                        {grade.semester && <span className="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">ترم: {grade.semester}</span>}
+                                                        {grade.seatNumber && <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded">جلوس: {grade.seatNumber}</span>}
                                                     </TableCell>
                                                     <TableCell className="font-bold">{grade.originalGrade}/100</TableCell>
                                                     <TableCell className="font-bold text-green-600">{grade.finalGrade}/100</TableCell>
@@ -746,7 +991,6 @@ export function GradeManagementForm({
                                     </Table>
                                 </div>
 
-                                {/* ملاحظات المعلم */}
                                 {subjectGrades.some(grade => grade.teacherNotes) && (
                                     <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                                         <h4 className="font-semibold text-yellow-800 mb-2">ملاحظات المعلم:</h4>
@@ -772,7 +1016,6 @@ export function GradeManagementForm({
                 )
             )}
 
-            {/* سجل التعديلات (Audit Log) */}
             {auditLogs.length > 0 && (
                 <Card className="p-6 bg-gray-50 border border-gray-200">
                     <h3 className="text-lg font-bold text-gray-800 mb-4">📋 سجل التعديلات</h3>

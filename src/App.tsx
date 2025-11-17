@@ -69,7 +69,11 @@ import NetPayroll from "./pages/finance/NetPayroll";
 // Classes
 import ClassesList from "./pages/classes/ClassesList";
 
+// Test Pages
+import AcademicTestPage from "./test/academic-test/AcademicTestPage";
 
+// Academic Search Page
+import AcademicSearchPage from "./pages/students/AcademicSearchPage";
 
 const queryClient = new QueryClient();
 
@@ -140,6 +144,12 @@ const App = () => (
 
             {/* Classes Routes */}
             <Route path="/classes" element={<ClassesList />} />
+
+            {/* Academic Search Route */}
+            <Route path="/academic/search" element={<AcademicSearchPage />} />
+
+            {/* Test Routes */}
+            <Route path="/test/academic-hierarchy" element={<AcademicTestPage />} />
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

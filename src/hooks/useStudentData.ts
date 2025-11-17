@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { StudentProfile, PersonalData, EnrollmentData, GuardianData, MotherData, AdministrativeData, EmergencyContact, SchoolFees, OtherExpense, BehavioralRecord, AcademicRecord, FinancialTransaction, AttendanceRecord, AuditTrailEntry } from '@/types/student';
+import { StudentProfile, PersonalData, EnrollmentData, GuardianData, MotherData, AdministrativeData, EmergencyContact, SchoolFees, OtherExpense, FinancialTransaction, AttendanceRecord } from '@/types/student';
 
 /**
  * Hook لجلب وتحديث بيانات الطالب من Supabase
@@ -25,6 +25,10 @@ export function useStudentData(studentId: string) {
                     .eq('student_id', studentId)
                     .maybeSingle();
 
+                console.log('useStudentData - Fetching student for studentId:', studentId);
+                console.log('useStudentData - studentData:', studentData);
+                console.log('useStudentData - studentError:', studentError);
+
                 if (studentError) throw studentError;
                 if (!studentData) throw new Error('الطالب غير موجود في قاعدة البيانات');
 
@@ -43,8 +47,27 @@ export function useStudentData(studentId: string) {
                     .eq('student_id', studentId)
                     .maybeSingle();
 
+                console.log('useStudentData - Fetching school_fees for studentId:', studentId);
+                console.log('useStudentData - schoolFees data:', schoolFees);
+                console.log('useStudentData - feesError:', feesError);
+
                 if (feesError && feesError.code !== 'PGRST116') { // PGRST116 = no rows returned
                     throw feesError;
+                }
+
+                // جلب الأقساط المرتبطة بالمصروفات
+                let feeInstallments: any[] = [];
+                if (schoolFees?.id) {
+                    const { data: installmentsData, error: installmentsError } = await supabase
+                        .from('fee_installments')
+                        .select('*')
+                        .eq('fee_id', schoolFees.id)
+                        .order('installment_number', { ascending: true });
+
+                    if (installmentsError) throw installmentsError;
+                    feeInstallments = installmentsData || [];
+                    console.log('useStudentData - Fetching fee_installments for fee_id:', schoolFees.id);
+                    console.log('useStudentData - installments data:', feeInstallments);
                 }
 
                 // جلب بيانات المصروفات الأخرى
@@ -55,8 +78,8 @@ export function useStudentData(studentId: string) {
 
                 if (expensesError) throw expensesError;
 
-                // جلب البيانات السلوكية
-                const { data: behavioralData, error: behavioralError } = await supabase
+                // جلب البيانات السلوكية (غير مستخدمة حالياً)
+                const { error: behavioralError } = await supabase
                     .from('behavioral_records')
                     .select('*')
                     .eq('student_id', studentId)
@@ -183,7 +206,22 @@ export function useStudentData(studentId: string) {
                         emergencyContactUpdated: studentData.emergency_contact_updated || '',
                     },
                     emergencyContacts: emergencyContacts || [],
-                    schoolFees: schoolFees || {
+                    schoolFees: schoolFees ? {
+                        id: schoolFees.id || '',
+                        studentId: schoolFees.student_id || studentId,
+                        totalAmount: schoolFees.total_amount || 0,
+                        installmentCount: schoolFees.installment_count || 1,
+                        advancePayment: schoolFees.advance_payment || 0,
+                        installments: feeInstallments.map((inst: any) => ({
+                            id: inst.id,
+                            feeId: inst.fee_id,
+                            installmentNumber: inst.installment_number,
+                            amount: inst.amount,
+                            dueDate: inst.due_date,
+                            paid: inst.paid || false,
+                            paidDate: inst.paid_date || '',
+                        })) || [],
+                    } : {
                         id: '',
                         studentId: studentId,
                         totalAmount: 0,
@@ -192,21 +230,6 @@ export function useStudentData(studentId: string) {
                         installments: [],
                     },
                     otherExpenses: otherExpenses || [],
-                    behavioralData: behavioralData ? {
-                        id: studentData.id,
-                        studentId: studentData.student_id,
-                        conductRating: behavioralData?.conduct_rating || 'جيد',
-                        disciplinaryIssues: behavioralData?.disciplinary_issues || false,
-                        counselorNotes: behavioralData?.counselor_notes || '',
-                        lastIncidentDate: behavioralData?.last_incident_date || '',
-                    } : {
-                        id: studentData.id,
-                        studentId: studentData.student_id,
-                        conductRating: 'جيد',
-                        disciplinaryIssues: false,
-                        counselorNotes: '',
-                        lastIncidentDate: '',
-                    },
                     behavioralRecords: [],
                     academicRecords: academicData ? [{
                         id: academicData.id,
@@ -223,7 +246,7 @@ export function useStudentData(studentId: string) {
                     financialTransactions: financialTransactions?.map((ft: any) => ({
                         id: ft.id,
                         studentId: ft.student_id,
-                        transactionType: ft.transaction_type as 'دفع' | 'استرجاع' | 'تعديل',
+                        transactionType: ft.transaction_type as 'دفعة' | 'مصروف إضافي' | 'خصم' | 'غرامة',
                         amount: ft.amount,
                         description: ft.description,
                         paymentMethod: ft.payment_method,
@@ -254,7 +277,7 @@ export function useStudentData(studentId: string) {
                 setStudentProfile(profile);
             } catch (err) {
                 console.error('خطأ في جلب البيانات:', err);
-                setError('فشل في جلب بيانات الطالب');
+                setError(err instanceof Error ? err.message : 'فشل في جلب بيانات الطالب');
             } finally {
                 setLoading(false);
             }
@@ -467,13 +490,59 @@ export function useStudentData(studentId: string) {
     const updateSchoolFees = async (data: Partial<SchoolFees>) => {
         if (!studentProfile) return;
 
-        const { error } = await supabase
-            .from('school_fees')
-            .update(data)
-            .eq('student_id', studentId);
+        try {
+            // تحديث بيانات المصروفات الأساسية
+            const updateData: any = {
+                total_amount: data.totalAmount,
+                installment_count: data.installmentCount,
+                advance_payment: data.advancePayment,
+                updated_at: new Date().toISOString(),
+            };
 
-        if (error) throw error;
-        await refreshStudentData();
+            // إزالة الخصائص undefined
+            Object.keys(updateData).forEach(key => 
+                updateData[key] === undefined && delete updateData[key]
+            );
+
+            const { error: updateError } = await supabase
+                .from('school_fees')
+                .update(updateData)
+                .eq('student_id', studentId);
+
+            if (updateError) throw updateError;
+
+            // إذا تم تحديث الأقساط، يتم تحديث جدول fee_installments
+            if (data.installments && data.installments.length > 0 && studentProfile.schoolFees.id) {
+                // حذف الأقساط القديمة
+                const { error: deleteError } = await supabase
+                    .from('fee_installments')
+                    .delete()
+                    .eq('fee_id', studentProfile.schoolFees.id);
+
+                if (deleteError) throw deleteError;
+
+                // إضافة الأقساط الجديدة
+                const { error: insertError } = await supabase
+                    .from('fee_installments')
+                    .insert(
+                        data.installments.map((inst: any) => ({
+                            fee_id: studentProfile.schoolFees.id,
+                            installment_number: inst.installmentNumber,
+                            amount: inst.amount,
+                            due_date: inst.dueDate,
+                            paid: inst.paid || false,
+                            paid_date: inst.paidDate || null,
+                        }))
+                    );
+
+                if (insertError) throw insertError;
+            }
+
+            await refreshStudentData();
+        } catch (err) {
+            console.error('خطأ في تحديث المصروفات:', err);
+            throw err;
+        }
     };
 
     // إنشاء بيانات المصروفات
@@ -487,7 +556,7 @@ export function useStudentData(studentId: string) {
     };
 
     // إضافة مصروف آخر
-    const addOtherExpense = async (data: Partial<OtherExpense>) => {
+    const addOtherExpense = async (data: Partial<OtherExpense>[]) => {
         try {
             // حذف المصروفات الأخرى الحالية
             await supabase
@@ -499,7 +568,7 @@ export function useStudentData(studentId: string) {
             if (data.length > 0) {
                 const { error } = await supabase
                     .from('other_expenses')
-                    .insert(data.map(expense => ({
+                    .insert(data.map((expense: Partial<OtherExpense>) => ({
                         student_id: expense.studentId || studentId,
                         expense_type: expense.expenseType,
                         quantity: expense.quantity || 1,
@@ -812,6 +881,19 @@ export function useStudentData(studentId: string) {
                 throw feesError;
             }
 
+            // جلب الأقساط المرتبطة بالمصروفات
+            let feeInstallments: any[] = [];
+            if (schoolFees?.id) {
+                const { data: installmentsData, error: installmentsError } = await supabase
+                    .from('fee_installments')
+                    .select('*')
+                    .eq('fee_id', schoolFees.id)
+                    .order('installment_number', { ascending: true });
+
+                if (installmentsError) throw installmentsError;
+                feeInstallments = installmentsData || [];
+            }
+
             // جلب بيانات المصروفات الأخرى
             const { data: otherExpenses, error: expensesError } = await supabase
                 .from('other_expenses')
@@ -940,7 +1022,22 @@ export function useStudentData(studentId: string) {
                     emergencyContactUpdated: studentData.emergency_contact_updated || '',
                 },
                 emergencyContacts: emergencyContacts || [],
-                schoolFees: schoolFees || {
+                schoolFees: schoolFees ? {
+                    id: schoolFees.id || '',
+                    studentId: schoolFees.student_id || studentId,
+                    totalAmount: schoolFees.total_amount || 0,
+                    installmentCount: schoolFees.installment_count || 1,
+                    advancePayment: schoolFees.advance_payment || 0,
+                    installments: feeInstallments.map((inst: any) => ({
+                        id: inst.id,
+                        feeId: inst.fee_id,
+                        installmentNumber: inst.installment_number,
+                        amount: inst.amount,
+                        dueDate: inst.due_date,
+                        paid: inst.paid || false,
+                        paidDate: inst.paid_date || '',
+                    })) || [],
+                } : {
                     id: '',
                     studentId: studentId,
                     totalAmount: 0,
@@ -949,21 +1046,6 @@ export function useStudentData(studentId: string) {
                     installments: [],
                 },
                 otherExpenses: otherExpenses || [],
-                behavioralData: behavioralData ? {
-                    id: studentData.id,
-                    studentId: studentData.student_id,
-                    conductRating: behavioralData?.conduct_rating || 'جيد',
-                    disciplinaryIssues: behavioralData?.disciplinary_issues || false,
-                    counselorNotes: behavioralData?.counselor_notes || '',
-                    lastIncidentDate: behavioralData?.last_incident_date || '',
-                } : {
-                    id: studentData.id,
-                    studentId: studentData.student_id,
-                    conductRating: 'جيد',
-                    disciplinaryIssues: false,
-                    counselorNotes: '',
-                    lastIncidentDate: '',
-                },
                 behavioralRecords: [],
                 academicRecords: academicData ? [{
                     id: academicData.id,
@@ -980,7 +1062,7 @@ export function useStudentData(studentId: string) {
                 financialTransactions: financialTransactions?.map((ft: any) => ({
                     id: ft.id,
                     studentId: ft.student_id,
-                    transactionType: ft.transaction_type as 'دفع' | 'استرجاع' | 'تعديل',
+                    transactionType: ft.transaction_type as 'دفعة' | 'مصروف إضافي' | 'خصم' | 'غرامة',
                     amount: ft.amount,
                     description: ft.description,
                     paymentMethod: ft.payment_method,
@@ -1037,19 +1119,19 @@ export function useStudentData(studentId: string) {
             // استرجاع البيانات القديمة بناءً على نوع التغيير
             switch (lastChange.changeType) {
                 case 'Personal Data':
-                    await updatePersonalData(oldData as PersonalData);
+                    await updatePersonalData(oldData as unknown as PersonalData);
                     break;
                 case 'Enrollment Data':
-                    await updateEnrollmentData(oldData as EnrollmentData);
+                    await updateEnrollmentData(oldData as unknown as EnrollmentData);
                     break;
                 case 'Guardian Data':
-                    await updateGuardianData(oldData as GuardianData);
+                    await updateGuardianData(oldData as unknown as GuardianData);
                     break;
                 case 'Mother Data':
-                    await updateMotherData(oldData as MotherData);
+                    await updateMotherData(oldData as unknown as MotherData);
                     break;
                 case 'Administrative Data':
-                    await updateAdministrativeData(oldData as AdministrativeData);
+                    await updateAdministrativeData(oldData as unknown as AdministrativeData);
                     break;
                 default:
                     console.warn('نوع التغيير غير مدعوم للتراجع:', lastChange.changeType);
@@ -1104,7 +1186,7 @@ export function useStudentData(studentId: string) {
                 }]);
 
             if (error) throw error;
-            
+
             // تحديث تاريخ آخر امتحان في السجلات الأكاديمية
             if (studentProfile?.academicRecords && studentProfile.academicRecords.length > 0) {
                 const academicRecord = studentProfile.academicRecords[0];
@@ -1113,7 +1195,7 @@ export function useStudentData(studentId: string) {
                     lastExamDate: new Date().toISOString().split('T')[0]
                 });
             }
-            
+
             return true;
         } catch (err) {
             console.error('خطأ في إضافة الدرجة:', err);

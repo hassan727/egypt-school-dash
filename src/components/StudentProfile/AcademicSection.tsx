@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { STUDENT_OPTIONS } from '@/data/studentConstants';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface AcademicSectionProps {
     data?: {
@@ -36,7 +37,7 @@ export function AcademicSection({ data, onSave, isReadOnly = false }: AcademicSe
             academicNotes: '',
             strengths: '',
             weaknesses: '',
-            lastExamDate: new Date().toISOString().split('T')[0],
+            lastExamDate: getEgyptianDateString(),
         }
     );
 

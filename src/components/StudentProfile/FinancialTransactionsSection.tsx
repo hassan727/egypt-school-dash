@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FinancialTransaction } from '@/types/student';
 import { Trash2, Plus } from 'lucide-react';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface FinancialTransactionsSectionProps {
     data?: FinancialTransaction[];
@@ -29,11 +30,11 @@ export function FinancialTransactionsSection({
 
     const handleAddTransaction = () => {
         const newTransaction: FinancialTransaction = {
-            transactionType: 'دفع',
+            transactionType: 'دفعة',
             amount: 0,
             description: '',
             paymentMethod: 'نقدي',
-            transactionDate: new Date().toISOString().split('T')[0],
+            transactionDate: getEgyptianDateString(),
             receiptNumber: '',
             createdBy: '',
         };
@@ -109,7 +110,7 @@ export function FinancialTransactionsSection({
                                         نوع المعاملة
                                     </Label>
                                     <select
-                                        value={transaction.transactionType || 'دفع'}
+                                        value={transaction.transactionType || 'دفعة'}
                                         onChange={(e) =>
                                             handleUpdateTransaction(
                                                 index,
@@ -120,9 +121,10 @@ export function FinancialTransactionsSection({
                                         disabled={isReadOnly || !isEditing}
                                         className="w-full p-2 border border-gray-300 rounded-md"
                                     >
-                                        <option>دفع</option>
-                                        <option>استرجاع</option>
-                                        <option>تعديل</option>
+                                        <option value="دفعة">دفعة</option>
+                                        <option value="مصروف إضافي">مصروف إضافي</option>
+                                        <option value="خصم">خصم</option>
+                                        <option value="غرامة">غرامة</option>
                                     </select>
                                 </div>
 

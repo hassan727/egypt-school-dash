@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { useStudentData } from '@/hooks/useStudentData';
+import { AcademicAuditLog } from '@/components/AcademicAuditLog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +17,7 @@ import {
     TrendingUp,
     Award,
     Clock,
+    Plus,
 } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -53,8 +55,32 @@ export default function StudentDashboard() {
     if (error) {
         return (
             <DashboardLayout>
-                <div className="text-center py-10">
-                    <p className="text-red-500 text-lg">حدث خطأ: {error}</p>
+                <div className="text-center py-10 space-y-4">
+                    <div className="p-6 bg-red-50 border border-red-200 rounded-lg max-w-md mx-auto">
+                        <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                        <h2 className="text-xl font-semibold text-red-800 mb-2">الطالب غير موجود</h2>
+                        <p className="text-red-600 mb-4">{error}</p>
+                        <p className="text-sm text-gray-600 mb-4">
+                            الطالب ذو المعرف "{studentId}" غير موجود في قاعدة البيانات
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                            <Button
+                                onClick={() => navigate('/students')}
+                                variant="outline"
+                                className="gap-2"
+                            >
+                                <ArrowRight className="h-4 w-4" />
+                                قائمة الطلاب
+                            </Button>
+                            <Button
+                                onClick={() => navigate('/students/create')}
+                                className="gap-2 bg-green-600 hover:bg-green-700"
+                            >
+                                <Plus className="h-4 w-4" />
+                                إضافة طالب جديد
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             </DashboardLayout>
         );
@@ -442,6 +468,9 @@ export default function StudentDashboard() {
                         العودة إلى قائمة الطلاب
                     </Button>
                 </div>
+
+                {/* سجل التغييرات الأكاديمية */}
+                <AcademicAuditLog studentId={studentId || ''} />
             </div>
         </DashboardLayout>
     );

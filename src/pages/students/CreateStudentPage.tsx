@@ -149,12 +149,38 @@ const CreateStudentPage = () => {
     };
 
     const handleUpdateSchoolFees = (feesData: any, installments: any[], auditLog: any[]) => {
-        validateAndSaveSection('fees', feesData, () => {
-            setStudentProfile(prev => ({
+        // Validate section first
+        const validationResult = validateSection('fees', feesData);
+
+        if (!validationResult.isValid) {
+            setSectionErrors(prev => ({
                 ...prev,
-                schoolFees: { ...feesData, installments, auditLog },
+                fees: validationResult.errors.map(err => err.message)
             }));
+            setSectionSaved(prev => ({
+                ...prev,
+                fees: false
+            }));
+            return;
+        }
+
+        // Clear errors and mark as saved
+        setSectionErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors.fees;
+            return newErrors;
         });
+
+        setSectionSaved(prev => ({
+            ...prev,
+            fees: true
+        }));
+
+        // Update student profile
+        setStudentProfile(prev => ({
+            ...prev,
+            schoolFees: { ...feesData, installments, auditLog },
+        }));
     };
 
     const handleAddOtherExpense = (expenses: any[], optionalExpenses: any) => {
@@ -207,7 +233,18 @@ const CreateStudentPage = () => {
     // Handle form submission
     const handleSubmit = async () => {
         setIsSubmitting(true);
-        
+
+        // Check if all sections are saved first
+        const allSectionsSaved = sectionSaved.personal && sectionSaved.enrollment &&
+                               sectionSaved.guardian && sectionSaved.mother &&
+                               sectionSaved.emergency && sectionSaved.fees;
+
+        if (!allSectionsSaved) {
+            alert('يرجى تصحيح الأخطاء في النموذج قبل التسجيل. تأكد من حفظ جميع الأقسام بنجاح.');
+            setIsSubmitting(false);
+            return;
+        }
+
         // Validate all sections before submission
         const validationResult = validateStudentData(
             studentProfile.personalData,
@@ -217,7 +254,7 @@ const CreateStudentPage = () => {
             studentProfile.emergencyContacts,
             studentProfile.schoolFees
         );
-        
+
         if (!validationResult.isValid) {
             alert('يرجى تصحيح الأخطاء في النموذج قبل التسجيل. تأكد من حفظ جميع الأقسام بنجاح.');
             setIsSubmitting(false);

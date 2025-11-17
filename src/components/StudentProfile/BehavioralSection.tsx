@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface BehavioralSectionProps {
     data?: {
@@ -42,7 +43,7 @@ export function BehavioralSection({ data, onSave, isReadOnly = false }: Behavior
             classroomBehavior: '',
             socialInteraction: '',
             counselorNotes: '',
-            lastIncidentDate: new Date().toISOString().split('T')[0],
+            lastIncidentDate: getEgyptianDateString(),
         }
     );
 

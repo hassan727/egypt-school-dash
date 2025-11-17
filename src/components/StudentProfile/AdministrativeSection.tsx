@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getEgyptianDateString } from '@/utils/helpers';
 
 interface AdministrativeSectionProps {
     data?: {
@@ -34,10 +35,10 @@ interface AdministrativeSectionProps {
 export function AdministrativeSection({ data, onSave, isReadOnly = false }: AdministrativeSectionProps) {
     const [formData, setFormData] = useState(
         data || {
-            admissionDate: new Date().toISOString().split('T')[0],
+            admissionDate: getEgyptianDateString(),
             studentIdNumber: '',
             fileStatus: 'نشط',
-            infoUpdateDate: new Date().toISOString().split('T')[0],
+            infoUpdateDate: getEgyptianDateString(),
             transportationStatus: 'لا يستخدم',
             busNumber: '',
             pickupPoint: '',
@@ -46,7 +47,7 @@ export function AdministrativeSection({ data, onSave, isReadOnly = false }: Admi
             healthInsurance: false,
             healthInsuranceNumber: '',
             administrativeNotes: '',
-            emergencyContactUpdated: new Date().toISOString().split('T')[0],
+            emergencyContactUpdated: getEgyptianDateString(),
         }
     );
 
