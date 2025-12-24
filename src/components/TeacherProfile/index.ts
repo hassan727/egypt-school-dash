@@ -1,0 +1,9 @@
+export { TeacherNavigation } from './TeacherNavigation';
+export { PersonalDataSection } from './PersonalDataSection';
+export { FinancialSummarySection } from './FinancialSummarySection';
+export { TeachingAssignmentsSection } from './TeachingAssignmentsSection';
+export { EvaluationsSection } from './EvaluationsSection';
+export { AttendanceRecordsSection } from './AttendanceRecordsSection';
+export { NotificationsSection } from './NotificationsSection';
+export { AuditTrailSection } from './AuditTrailSection';
+export { PrintOptionsModal } from './PrintOptionsModal';

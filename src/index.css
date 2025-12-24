@@ -1,0 +1,333 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 210 25% 98%;
+    --foreground: 220 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 15%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 220 20% 20%;
+
+    --muted: 210 30% 95%;
+    --muted-foreground: 220 15% 50%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 60%;
+
+    --radius: 0.75rem;
+    
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 76% 36%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 271 91% 65%;
+    --chart-5: 0 84% 60%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 15%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 217 91% 60%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  .dark {
+    --background: 220 25% 10%;
+    --foreground: 210 40% 98%;
+
+    --card: 220 20% 13%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 220 20% 13%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 220 20% 18%;
+    --muted-foreground: 220 15% 65%;
+
+    --accent: 142 76% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 220 20% 22%;
+    --input: 220 20% 22%;
+    --ring: 217 91% 60%;
+    
+    --sidebar-background: 220 25% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 15%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 220 20% 18%;
+    --sidebar-ring: 217 91% 60%;
+    
+    --chart-1: 217 91% 60%;
+    --chart-2: 142 76% 36%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 271 91% 65%;
+    --chart-5: 0 84% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-cairo;
+  }
+
+  html {
+    direction: rtl;
+  }
+}
+
+/* Print Styles - إخفاء عناصر واجهة المستخدم عند الطباعة */
+@media print {
+  /* إخفاء الشريط العلوي والقوائم */
+  nav,
+  .navbar,
+  header,
+  .sidebar,
+  .navigation,
+  .menu,
+  .nav-menu,
+  .top-bar,
+  .header-bar {
+    display: none !important;
+  }
+
+  /* إخفاء الأزرار والعناصر التفاعلية */
+  button,
+  .button,
+  .btn,
+  input,
+  select,
+  textarea,
+  .form-control,
+  .interactive,
+  .action-buttons {
+    display: none !important;
+  }
+
+  /* إخفاء الرسوم البيانية والتحليلات */
+  .chart,
+  .analytics,
+  .statistics,
+  .stats,
+  .graph,
+  .diagram,
+  canvas {
+    display: none !important;
+  }
+
+  /* إخفاء التنقل والروابط */
+  .breadcrumb,
+  .pagination,
+  .tabs,
+  .tab-navigation,
+  a,
+  .link {
+    display: none !important;
+  }
+
+  /* إخفاء الإشعارات والرسائل */
+  .notification,
+  .alert,
+  .message,
+  .toast,
+  .modal,
+  .popup,
+  .overlay {
+    display: none !important;
+  }
+
+  /* إخفاء التذييل والمعلومات الإضافية */
+  footer,
+  .footer,
+  .bottom-bar,
+  .additional-info,
+  .meta-info {
+    display: none !important;
+  }
+
+  /* إخفاء عناصر التحكم في الشهادة */
+  .certificate-controls,
+  .certificate-settings,
+  .print-controls {
+    display: none !important;
+  }
+
+  /* تخصيص الصفحة المطبوعة */
+  body {
+    margin: 0;
+    padding: 20px;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* إظهار الشهادة فقط */
+  .certificate-content,
+  .certificate-print,
+  .print-certificate {
+    display: block !important;
+    page-break-inside: avoid;
+  }
+
+  /* تخصيص الجداول للطباعة */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0;
+  }
+
+  th, td {
+    border: 1px solid #000;
+    padding: 8px;
+    text-align: right;
+    font-size: 12px;
+  }
+
+  /* تخصيص العناوين */
+  h1, h2, h3, h4, h5, h6 {
+    color: black !important;
+    page-break-after: avoid;
+  }
+
+  /* إزالة الظلال والحدود غير الضرورية */
+  .shadow,
+  .border,
+  .rounded {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* تخصيص الألوان للطباعة */
+  .text-blue-600 { color: #000080 !important; }
+  .text-green-600 { color: #008000 !important; }
+  .text-red-600 { color: #800000 !important; }
+  .text-yellow-600 { color: #808000 !important; }
+  .text-purple-600 { color: #800080 !important; }
+  .bg-blue-50 { background-color: white !important; }
+  .bg-green-50 { background-color: white !important; }
+  .bg-purple-50 { background-color: white !important; }
+}
+
+/* تخصيص الطباعة للشهادة الأكاديمية */
+.printing-certificate .certificate-content {
+  display: block !important;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 9999;
+  background: white;
+  margin: 0;
+  padding: 20px;
+  box-shadow: none;
+  border: none;
+}
+
+.printing-certificate .certificate-controls,
+.printing-certificate .certificate-settings,
+.printing-certificate .print-controls,
+.printing-certificate nav,
+.printing-certificate header,
+.printing-certificate .sidebar,
+.printing-certificate button,
+.printing-certificate .button,
+.printing-certificate .btn,
+.printing-certificate .chart,
+.printing-certificate .analytics,
+.printing-certificate .statistics,
+.printing-certificate .stats,
+.printing-certificate footer,
+.printing-certificate .footer {
+  display: none !important;
+}
+
+.printing-certificate body {
+  background: white !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* إخفاء كل شيء عدا الجدول المطلوب للطباعة */
+.printing-certificate * {
+  visibility: hidden;
+}
+
+.printing-certificate .print-certificate-table,
+.printing-certificate .print-certificate-table * {
+  visibility: visible !important;
+}
+
+.printing-certificate .print-table {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80% !important;
+  max-width: 600px;
+  background: white !important;
+  border: 2px solid #000 !important;
+}
+
+.printing-certificate .print-table th,
+.printing-certificate .print-table td {
+  border: 1px solid #000 !important;
+  padding: 8px !important;
+  font-size: 14px !important;
+  color: #000 !important;
+}

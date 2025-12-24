@@ -1,0 +1,42 @@
+
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL_HERE'; // User needs this setup in env often, but for script we might need to hardcode or read .env
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_KEY_HERE';
+
+// We can try to rely on the environment variables being present when run via npm/node within the project context if dotenv is setup, 
+// OR we can ask the user to provide them? 
+// No, the user provided `fix_sql_encoding.py`, maybe I can use python? 
+// OR better, I can use the existing `src/lib/supabase.ts` if I run it effectively? No, that's client side.
+
+// Simplest approach: Create a standalone Typescript file that can be run with ts-node if available, 
+// or just a raw JS file.
+// Or even easier: Write a manual SQL script file that the user can run in Supabase dashboard?
+// The user is asking "Why?". They might not want to run SQL manually.
+
+// I will create a script that runs in the BROWSER CONSOLE context? No.
+// I can write a small utility function in the React app that runs ONCE.
+// OR I can use the `run_command` tool to execute a node script if I have access to credentials.
+
+// Wait, I can't easily see .env. 
+// BUT, the user has `src/lib/supabase.ts` which uses `import.meta.env`. 
+// I will create a TEMPORARY React component/page "FixDataPage.tsx" and route to it, or just add a button in StudentsList "Fix Data".
+
+// Let's add a "Fix Data" button in StudentsList (hidden or debug) OR just auto-fix in `fetchStudents`?
+// Auto-fixing in `fetchStudents` is risky/side-effect heavy.
+
+// Let's create `fix_students.js` using the Supabase REST API via `fetch` if I can get the URL/Key.
+// Using `supabase_schema.sql` suggests I don't have the keys.
+
+// Alternate plan: 
+// Add a "Repair Data" button in standard UI that calls a function `repairStudentData`.
+// This function queries students where `academic_year` is null and updates them.
+// This is safe and user-driven.
+
+// Let's add it to `StudentsList.tsx` temporarily or permanently as a "Utility".
+// Or simpler: I will just perform the specific fix for `STU20255498` via a tiny temporary hidden effect in `StudentsList.tsx`.
+// "If totalDbCount > 0 && students.length === 0" maybe? No.
+
+// Let's add a small "Fix Issues" button in the filter bar of `StudentsList` that appears if we detect students with null academic year.
+// This is a robust feature.
+
