@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { StudentProfile, PersonalData, EnrollmentData, GuardianData, MotherData, AdministrativeData, EmergencyContact, SchoolFees, OtherExpense, FinancialTransaction, AttendanceRecord } from '@/types/student';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 /**
  * Hook لجلب وتحديث بيانات الطالب من Supabase
@@ -10,6 +11,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
     const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const schoolId = useSystemSchoolId();
 
     // جلب بيانات الطالب الكاملة
     useEffect(() => {
@@ -31,6 +33,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
                         )
                     `)
                     .eq('student_id', studentId)
+                    .eq('school_id', schoolId) // Enforce School Identity
                     .maybeSingle();
 
 
@@ -299,10 +302,10 @@ export function useStudentData(studentId: string, academicYear?: string) {
             }
         };
 
-        if (studentId) {
+        if (studentId && schoolId) {
             fetchStudentData();
         }
-    }, [studentId, academicYear]);
+    }, [studentId, academicYear, schoolId]);
 
     // Save audit trail function
     const saveAuditTrail = async (changeType: string, oldData: any, newData: any) => {
@@ -348,7 +351,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     religion: data.religion,
                     special_needs: data.specialNeeds,
                 })
-                .eq('student_id', data.studentId || studentId);
+                .eq('student_id', data.studentId || studentId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -390,7 +394,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
             const { error } = await supabase
                 .from('students')
                 .update(updatePayload)
-                .eq('student_id', data.studentId || studentId);
+                .eq('student_id', data.studentId || studentId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -426,7 +431,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     has_legal_guardian: data.hasLegalGuardian,
                     guardian_social_media: data.socialMedia,
                 })
-                .eq('student_id', data.studentId || studentId);
+                .eq('student_id', data.studentId || studentId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -459,7 +465,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     mother_address: data.address,
                     mother_relationship: data.relationship,
                 })
-                .eq('student_id', data.studentId || studentId);
+                .eq('student_id', data.studentId || studentId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -570,7 +577,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
     const createSchoolFees = async (data: Partial<SchoolFees>) => {
         const { error } = await supabase
             .from('school_fees')
-            .insert([{ ...data, student_id: studentId }]);
+            .insert([{ ...data, student_id: studentId, school_id: schoolId }]);
 
         if (error) throw error;
         await refreshStudentData();
@@ -697,7 +704,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
                         counselor_notes: data.counselorNotes,
                         last_incident_date: data.lastIncidentDate,
                     })
-                    .eq('student_id', studentId);
+                    .eq('student_id', studentId)
+                    .eq('school_id', schoolId);
                 error = updateError;
             } else {
                 // إنشاء بيانات جديدة
@@ -705,6 +713,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     .from('behavioral_records')
                     .insert({
                         student_id: studentId,
+                        school_id: schoolId,
                         conduct_rating: data.conductRating,
                         attendance_rate: data.attendanceRate,
                         absences: data.absences,
@@ -754,7 +763,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     administrative_notes: data.administrativeNotes,
                     emergency_contact_updated: data.emergencyContactUpdated,
                 })
-                .eq('student_id', data.studentId || studentId);
+                .eq('student_id', data.studentId || studentId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -777,6 +787,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
                 .from('financial_transactions')
                 .insert({
                     student_id: data.studentId,
+                    school_id: schoolId,
                     academic_year_code: yearCode,
                     transaction_type: data.transactionType,
                     amount: data.amount,

@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { NATIONALITIES } from '@/data/employeeConstants';
 
 export interface PersonalData {
     full_name_ar: string;
@@ -99,12 +100,22 @@ export const PersonalDataForm = ({ data, onChange, errors = {}, isReadOnly = fal
 
             <div className="grid gap-2">
                 <Label htmlFor="nationality">الجنسية</Label>
-                <Input
-                    id="nationality"
+                <Select
                     value={data.nationality}
-                    onChange={(e) => onChange('nationality', e.target.value)}
+                    onValueChange={(v) => onChange('nationality', v)}
                     disabled={isReadOnly}
-                />
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="اختر الجنسية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {NATIONALITIES.map((nation) => (
+                            <SelectItem key={nation.value} value={nation.value}>
+                                {nation.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             <div className="grid gap-2">

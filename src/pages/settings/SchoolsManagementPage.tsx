@@ -38,13 +38,18 @@ import {
     Building,
     MapPin,
     Phone,
-    Mail
+    Mail,
+    Settings,
+    Zap,
+    Palette
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTenantSchools } from '@/hooks/useTenantData';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { School as SchoolType } from '@/types/auth';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
 
 export default function SchoolsManagementPage() {
     const { user, hasRole } = useAuth();
@@ -54,6 +59,26 @@ export default function SchoolsManagementPage() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingSchool, setEditingSchool] = useState<SchoolType | null>(null);
     const [saving, setSaving] = useState(false);
+    const [activeTab, setActiveTab] = useState('basic');
+
+    // Default Settings
+    const defaultSettings = {
+        features: {
+            finance: true,
+            hr: true,
+            students: true,
+            control: true
+        },
+        branding: {
+            logo_url: '',
+            print_header: '',
+            primary_color: '#2563eb'
+        },
+        limits: {
+            max_users: 10,
+            max_students: 500
+        }
+    };
 
     // Form state
     const [formData, setFormData] = useState({
@@ -65,6 +90,7 @@ export default function SchoolsManagementPage() {
         governorate: '',
         phone: '',
         email: '',
+        settings: defaultSettings
     });
 
     // Load schools
@@ -98,6 +124,20 @@ export default function SchoolsManagementPage() {
         }));
     };
 
+    // Handle Settings Change
+    const handleSettingChange = (category: string, key: string, value: any) => {
+        setFormData(prev => ({
+            ...prev,
+            settings: {
+                ...prev.settings,
+                [category]: {
+                    ...prev.settings[category as keyof typeof prev.settings],
+                    [key]: value
+                }
+            }
+        }));
+    };
+
     // Reset form
     const resetForm = () => {
         setFormData({
@@ -109,13 +149,23 @@ export default function SchoolsManagementPage() {
             governorate: '',
             phone: '',
             email: '',
+            settings: defaultSettings
         });
         setEditingSchool(null);
+        setActiveTab('basic');
     };
 
     // Open edit dialog
     const openEditDialog = (school: SchoolType) => {
         setEditingSchool(school);
+        const currentSettings = school.settings || defaultSettings;
+        // Merge with defaults to ensure all keys exist
+        const mergedSettings = {
+            features: { ...defaultSettings.features, ...(currentSettings.features || {}) },
+            branding: { ...defaultSettings.branding, ...(currentSettings.branding || {}) },
+            limits: { ...defaultSettings.limits, ...(currentSettings.limits || {}) }
+        };
+
         setFormData({
             school_code: school.schoolCode,
             school_name: school.schoolName,
@@ -125,6 +175,7 @@ export default function SchoolsManagementPage() {
             governorate: school.governorate || '',
             phone: school.phone || '',
             email: school.email || '',
+            settings: mergedSettings
         });
         setDialogOpen(true);
     };
@@ -138,37 +189,33 @@ export default function SchoolsManagementPage() {
 
         setSaving(true);
         try {
+            const schoolData = {
+                school_code: formData.school_code,
+                school_name: formData.school_name,
+                school_name_en: formData.school_name_en,
+                address: formData.address,
+                city: formData.city,
+                governorate: formData.governorate,
+                phone: formData.phone,
+                email: formData.email,
+                settings: formData.settings, // Save Settings JSON
+            };
+
             if (editingSchool) {
                 // Update
                 const { error } = await supabase
                     .from('schools')
-                    .update({
-                        school_code: formData.school_code,
-                        school_name: formData.school_name,
-                        school_name_en: formData.school_name_en,
-                        address: formData.address,
-                        city: formData.city,
-                        governorate: formData.governorate,
-                        phone: formData.phone,
-                        email: formData.email,
-                    })
+                    .update(schoolData)
                     .eq('id', editingSchool.id);
 
                 if (error) throw error;
-                toast.success('تم تحديث المدرسة');
+                toast.success('تم تحديث المدرسة وإعداداتها');
             } else {
                 // Create
                 const { error } = await supabase
                     .from('schools')
                     .insert({
-                        school_code: formData.school_code,
-                        school_name: formData.school_name,
-                        school_name_en: formData.school_name_en,
-                        address: formData.address,
-                        city: formData.city,
-                        governorate: formData.governorate,
-                        phone: formData.phone,
-                        email: formData.email,
+                        ...schoolData,
                         is_active: true,
                     });
 
@@ -222,7 +269,7 @@ export default function SchoolsManagementPage() {
         <DashboardLayout>
             <PageLayout
                 title="إدارة المدارس"
-                description="إنشاء وإدارة المدارس في النظام"
+                description="مركز التحكم: إنشاء وإدارة المدارس وتخصيص صلاحياتها"
                 showBackButton
             >
                 {/* Stats */}
@@ -275,132 +322,245 @@ export default function SchoolsManagementPage() {
                         if (!open) resetForm();
                     }}>
                         <DialogTrigger asChild>
-                            <Button>
+                            <Button className="bg-blue-600 hover:bg-blue-700 shadow-sm">
                                 <Plus className="h-4 w-4 ml-2" />
                                 إضافة مدرسة جديدة
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-lg">
+                        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                                <DialogTitle>
-                                    {editingSchool ? 'تعديل المدرسة' : 'إضافة مدرسة جديدة'}
+                                <DialogTitle className="text-xl">
+                                    {editingSchool ? 'تعديل بيانات المدرسة' : 'إضافة مدرسة جديدة'}
                                 </DialogTitle>
                             </DialogHeader>
-                            <div className="space-y-4 mt-4">
-                                <div className="grid grid-cols-2 gap-4">
+
+                            <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+                                <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
+                                    <TabsTrigger value="advanced" className="gap-2">
+                                        <Settings className="h-4 w-4" />
+                                        الإعدادات المتقدمة
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                {/* Basic Info Tab */}
+                                <TabsContent value="basic" className="space-y-4 mt-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>كود المدرسة *</Label>
+                                            <Input
+                                                name="school_code"
+                                                value={formData.school_code}
+                                                onChange={handleChange}
+                                                placeholder="SCH001"
+                                                dir="ltr"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>اسم المدرسة *</Label>
+                                            <Input
+                                                name="school_name"
+                                                value={formData.school_name}
+                                                onChange={handleChange}
+                                                placeholder="مدرسة النور"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div className="space-y-2">
-                                        <Label>كود المدرسة *</Label>
+                                        <Label>الاسم بالإنجليزية</Label>
                                         <Input
-                                            name="school_code"
-                                            value={formData.school_code}
+                                            name="school_name_en"
+                                            value={formData.school_name_en}
                                             onChange={handleChange}
-                                            placeholder="SCH001"
+                                            placeholder="El-Nour School"
                                             dir="ltr"
                                         />
                                     </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>المحافظة</Label>
+                                            <Input
+                                                name="governorate"
+                                                value={formData.governorate}
+                                                onChange={handleChange}
+                                                placeholder="القاهرة"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>المدينة</Label>
+                                            <Input
+                                                name="city"
+                                                value={formData.city}
+                                                onChange={handleChange}
+                                                placeholder="مدينة نصر"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div className="space-y-2">
-                                        <Label>اسم المدرسة *</Label>
+                                        <Label>العنوان</Label>
                                         <Input
-                                            name="school_name"
-                                            value={formData.school_name}
+                                            name="address"
+                                            value={formData.address}
                                             onChange={handleChange}
-                                            placeholder="مدرسة النور"
+                                            placeholder="شارع..."
                                         />
                                     </div>
-                                </div>
 
-                                <div className="space-y-2">
-                                    <Label>الاسم بالإنجليزية</Label>
-                                    <Input
-                                        name="school_name_en"
-                                        value={formData.school_name_en}
-                                        onChange={handleChange}
-                                        placeholder="El-Nour School"
-                                        dir="ltr"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>المحافظة</Label>
-                                        <Input
-                                            name="governorate"
-                                            value={formData.governorate}
-                                            onChange={handleChange}
-                                            placeholder="القاهرة"
-                                        />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>الهاتف</Label>
+                                            <Input
+                                                name="phone"
+                                                value={formData.phone}
+                                                onChange={handleChange}
+                                                placeholder="0123456789"
+                                                dir="ltr"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>البريد الإلكتروني</Label>
+                                            <Input
+                                                name="email"
+                                                value={formData.email}
+                                                onChange={handleChange}
+                                                placeholder="info@school.com"
+                                                dir="ltr"
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>المدينة</Label>
-                                        <Input
-                                            name="city"
-                                            value={formData.city}
-                                            onChange={handleChange}
-                                            placeholder="مدينة نصر"
-                                        />
-                                    </div>
-                                </div>
+                                </TabsContent>
 
-                                <div className="space-y-2">
-                                    <Label>العنوان</Label>
-                                    <Input
-                                        name="address"
-                                        value={formData.address}
-                                        onChange={handleChange}
-                                        placeholder="شارع..."
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>الهاتف</Label>
-                                        <Input
-                                            name="phone"
-                                            value={formData.phone}
-                                            onChange={handleChange}
-                                            placeholder="0123456789"
-                                            dir="ltr"
-                                        />
+                                {/* Advanced Settings Tab */}
+                                <TabsContent value="advanced" className="space-y-6 mt-4">
+                                    {/* Features Section */}
+                                    <div className="space-y-4 border p-4 rounded-lg bg-gray-50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Zap className="h-5 w-5 text-amber-500" />
+                                            <h3 className="font-semibold text-lg">تفعيل المميزات (Features)</h3>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="flex items-center justify-between p-3 bg-white rounded border">
+                                                <div className="space-y-0.5">
+                                                    <Label>النظام المالي</Label>
+                                                    <p className="text-xs text-muted-foreground">الفواتير، الرواتب، المصروفات</p>
+                                                </div>
+                                                <Switch
+                                                    checked={formData.settings?.features?.finance}
+                                                    onCheckedChange={(c) => handleSettingChange('features', 'finance', c)}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 bg-white rounded border">
+                                                <div className="space-y-0.5">
+                                                    <Label>الموارد البشرية</Label>
+                                                    <p className="text-xs text-muted-foreground">الموظفين، الحضور، الإجازات</p>
+                                                </div>
+                                                <Switch
+                                                    checked={formData.settings?.features?.hr}
+                                                    onCheckedChange={(c) => handleSettingChange('features', 'hr', c)}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 bg-white rounded border">
+                                                <div className="space-y-0.5">
+                                                    <Label>شؤون الطلاب</Label>
+                                                    <p className="text-xs text-muted-foreground">الطلاب، الفصول، الغياب</p>
+                                                </div>
+                                                <Switch
+                                                    checked={formData.settings?.features?.students}
+                                                    onCheckedChange={(c) => handleSettingChange('features', 'students', c)}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 bg-white rounded border">
+                                                <div className="space-y-0.5">
+                                                    <Label>الكنترول</Label>
+                                                    <p className="text-xs text-muted-foreground">الامتحانات، الدرجات، الشهادات</p>
+                                                </div>
+                                                <Switch
+                                                    checked={formData.settings?.features?.control}
+                                                    onCheckedChange={(c) => handleSettingChange('features', 'control', c)}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>البريد الإلكتروني</Label>
-                                        <Input
-                                            name="email"
-                                            value={formData.email}
-                                            onChange={handleChange}
-                                            placeholder="info@school.com"
-                                            dir="ltr"
-                                        />
-                                    </div>
-                                </div>
 
-                                <div className="flex gap-3 pt-4">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setDialogOpen(false)}
-                                        className="flex-1"
-                                    >
-                                        إلغاء
-                                    </Button>
-                                    <Button
-                                        onClick={handleSave}
-                                        disabled={saving}
-                                        className="flex-1"
-                                    >
-                                        {saving ? (
-                                            <>
-                                                <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                                                جاري الحفظ...
-                                            </>
-                                        ) : (
-                                            'حفظ'
-                                        )}
-                                    </Button>
-                                </div>
+                                    {/* Branding Section */}
+                                    <div className="space-y-4 border p-4 rounded-lg bg-gray-50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Palette className="h-5 w-5 text-purple-500" />
+                                            <h3 className="font-semibold text-lg">الهوية والطباعة (Branding)</h3>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <Label>ترويسة التقارير (Header Text)</Label>
+                                                <Input
+                                                    value={formData.settings?.branding?.print_header || ''}
+                                                    onChange={(e) => handleSettingChange('branding', 'print_header', e.target.value)}
+                                                    placeholder="مثال: مدارس النور الدولية - سجل تجاري 12345"
+                                                />
+                                                <p className="text-xs text-muted-foreground">هذا النص سيظهر في أعلى جميع التقارير المطبوعة</p>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label>رابط الشعار (Logo URL)</Label>
+                                                    <Input
+                                                        value={formData.settings?.branding?.logo_url || ''}
+                                                        onChange={(e) => handleSettingChange('branding', 'logo_url', e.target.value)}
+                                                        placeholder="https://..."
+                                                        dir="ltr"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>اللون الرئيسي</Label>
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            type="color"
+                                                            className="w-12 h-10 p-1"
+                                                            value={formData.settings?.branding?.primary_color || '#2563eb'}
+                                                            onChange={(e) => handleSettingChange('branding', 'primary_color', e.target.value)}
+                                                        />
+                                                        <Input
+                                                            value={formData.settings?.branding?.primary_color || '#2563eb'}
+                                                            onChange={(e) => handleSettingChange('branding', 'primary_color', e.target.value)}
+                                                            dir="ltr"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+                            </Tabs>
+
+                            <div className="flex gap-3 pt-4 border-t mt-4">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setDialogOpen(false)}
+                                    className="flex-1"
+                                >
+                                    إلغاء
+                                </Button>
+                                <Button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="flex-1 bg-green-600 hover:bg-green-700"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                                            جاري الحفظ...
+                                        </>
+                                    ) : (
+                                        'حفظ التغييرات'
+                                    )}
+                                </Button>
                             </div>
                         </DialogContent>
                     </Dialog>
                 </div>
+
 
                 {/* Schools Table */}
                 <Card>

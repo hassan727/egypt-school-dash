@@ -5,9 +5,9 @@ import { supabase } from '@/lib/supabase';
  */
 export class AnalyticsService {
   // إحصائيات الأداء الأكاديمي
-  static async getAcademicStats(stage?: string) {
+  static async getAcademicStats(schoolId: string, stage?: string) {
     try {
-      let query = supabase.from('academic_records').select('current_gpa, passing_status, student_id');
+      let query = supabase.from('academic_records').select('current_gpa, passing_status, student_id').eq('school_id', schoolId);
 
       if (stage) {
         query = query.in('student_id', []);
@@ -32,9 +32,9 @@ export class AnalyticsService {
   }
 
   // إحصائيات الحضور
-  static async getAttendanceStats(studentId?: string) {
+  static async getAttendanceStats(schoolId: string, studentId?: string) {
     try {
-      let query = supabase.from('attendance_records').select('status, student_id, date');
+      let query = supabase.from('attendance_records').select('status, student_id, date').eq('school_id', schoolId);
 
       if (studentId) {
         query = query.eq('student_id', studentId);
@@ -62,11 +62,12 @@ export class AnalyticsService {
     }
   }
 
-  static async getAttendanceStatsByRange(startDate: string, endDate: string) {
+  static async getAttendanceStatsByRange(schoolId: string, startDate: string, endDate: string) {
     try {
       const { data, error } = await supabase
         .from('attendance_records')
         .select('status, student_id, date')
+        .eq('school_id', schoolId)
         .gte('date', startDate)
         .lte('date', endDate);
 
@@ -86,11 +87,12 @@ export class AnalyticsService {
     }
   }
 
-  static async getAttendanceDetailsByRange(startDate: string, endDate: string) {
+  static async getAttendanceDetailsByRange(schoolId: string, startDate: string, endDate: string) {
     try {
       const query = supabase
         .from('attendance_records')
         .select('student_id, date, status')
+        .eq('school_id', schoolId)
         .gte('date', startDate)
         .lte('date', endDate);
 
@@ -129,6 +131,7 @@ export class AnalyticsService {
   }
 
   static async getAttendanceDetailsByRangeForStudents(
+    schoolId: string,
     startDate: string,
     endDate: string,
     studentIds: string[]
@@ -137,6 +140,7 @@ export class AnalyticsService {
       const query = supabase
         .from('attendance_records')
         .select('student_id, date, status')
+        .eq('school_id', schoolId)
         .gte('date', startDate)
         .lte('date', endDate)
         .in('student_id', studentIds);
@@ -175,6 +179,7 @@ export class AnalyticsService {
   }
 
   static async getAttendanceDailyAggregatesByRange(
+    schoolId: string,
     startDate: string,
     endDate: string,
     studentIds?: string[]
@@ -183,6 +188,7 @@ export class AnalyticsService {
       let query = supabase
         .from('attendance_records')
         .select('date, status, student_id')
+        .eq('school_id', schoolId)
         .gte('date', startDate)
         .lte('date', endDate);
 
@@ -224,17 +230,19 @@ export class AnalyticsService {
   }
 
   // إحصائيات مالية
-  static async getFinancialStats() {
+  static async getFinancialStats(schoolId: string) {
     try {
       const { data: fees, error: feesError } = await supabase
         .from('school_fees')
-        .select('total_amount, student_id');
+        .select('total_amount, student_id')
+        .eq('school_id', schoolId);
 
       if (feesError) throw feesError;
 
       const { data: transactions, error: transError } = await supabase
         .from('financial_transactions')
-        .select('amount, student_id');
+        .select('amount, student_id')
+        .eq('school_id', schoolId);
 
       if (transError) throw transError;
 
@@ -255,11 +263,12 @@ export class AnalyticsService {
   }
 
   // إحصائيات سلوكية
-  static async getBehavioralStats() {
+  static async getBehavioralStats(schoolId: string) {
     try {
       const { data, error } = await supabase
         .from('behavioral_records')
-        .select('conduct_rating, disciplinary_issues');
+        .select('conduct_rating, disciplinary_issues')
+        .eq('school_id', schoolId);
 
       if (error) throw error;
 
@@ -280,11 +289,12 @@ export class AnalyticsService {
   }
 
   // التوزيع حسب المراحل
-  static async getDistributionByStage() {
+  static async getDistributionByStage(schoolId: string) {
     try {
       const { data, error } = await supabase
         .from('students')
-        .select('stage');
+        .select('stage')
+        .eq('school_id', schoolId);
 
       if (error) throw error;
 
@@ -306,11 +316,12 @@ export class AnalyticsService {
   }
 
   // الاتجاهات الشهرية
-  static async getMonthlyTrends() {
+  static async getMonthlyTrends(schoolId: string) {
     try {
       const { data, error } = await supabase
         .from('student_audit_trail')
-        .select('created_at');
+        .select('created_at')
+        .eq('school_id', schoolId);
 
       if (error) throw error;
 
@@ -335,13 +346,13 @@ export class AnalyticsService {
   }
 
   // تقرير شامل
-  static async getComprehensiveReport() {
+  static async getComprehensiveReport(schoolId: string) {
     try {
       const [academic, attendance, financial, behavioral] = await Promise.all([
-        this.getAcademicStats(),
-        this.getAttendanceStats(),
-        this.getFinancialStats(),
-        this.getBehavioralStats(),
+        this.getAcademicStats(schoolId),
+        this.getAttendanceStats(schoolId),
+        this.getFinancialStats(schoolId),
+        this.getBehavioralStats(schoolId),
       ]);
 
       return {
@@ -358,11 +369,12 @@ export class AnalyticsService {
   }
 
   // أعلى الطلاب أداءً
-  static async getTopPerformers(limit = 10) {
+  static async getTopPerformers(schoolId: string, limit = 10) {
     try {
       const { data, error } = await supabase
         .from('academic_records')
         .select('student_id, current_gpa')
+        .eq('school_id', schoolId)
         .order('current_gpa', { ascending: false })
         .limit(limit);
 
@@ -376,11 +388,12 @@ export class AnalyticsService {
   }
 
   // الطلاب بحاجة للدعم
-  static async getStudentsNeedingSupport() {
+  static async getStudentsNeedingSupport(schoolId: string) {
     try {
       const { data: academic, error: academicError } = await supabase
         .from('academic_records')
         .select('student_id')
+        .eq('school_id', schoolId)
         .lt('current_gpa', 2.0);
 
       if (academicError) throw academicError;
@@ -388,6 +401,7 @@ export class AnalyticsService {
       const { data: attendance, error: attendanceError } = await supabase
         .from('attendance_records')
         .select('student_id')
+        .eq('school_id', schoolId)
         .eq('status', 'غائب')
         .limit(100);
 
@@ -414,6 +428,7 @@ export class AnalyticsService {
    * يُظهر حضور كل يوم لفصل محدد مع التفاصيل الكاملة
    */
   static async getDailyClassAttendanceReport(
+    schoolId: string,
     classId: string,
     startDate: string,
     endDate: string
@@ -423,6 +438,7 @@ export class AnalyticsService {
       const { data: students, error: studentsError } = await supabase
         .from('students')
         .select('student_id, full_name_ar, class_id')
+        .eq('school_id', schoolId)
         .eq('class_id', classId)
         .not('class_id', 'is', null);
 
@@ -439,6 +455,7 @@ export class AnalyticsService {
       const { data: attendance, error: attendanceError } = await supabase
         .from('attendance_records')
         .select('student_id, date, status')
+        .eq('school_id', schoolId)
         .in('student_id', studentIds)
         .gte('date', startDate)
         .lte('date', endDate);
@@ -507,6 +524,7 @@ export class AnalyticsService {
    * تقرير الفصل الشامل مع تفاصيل الطلاب
    */
   static async getClassAttendanceReport(
+    schoolId: string,
     classId: string,
     startDate: string,
     endDate: string
@@ -529,6 +547,7 @@ export class AnalyticsService {
                         )
                     )
                 `)
+        .eq('school_id', schoolId)
         .eq('class_id', classId)
         .not('class_id', 'is', null)
         .order('full_name_ar');
@@ -545,6 +564,7 @@ export class AnalyticsService {
       const { data: attendance, error: attendanceError } = await supabase
         .from('attendance_records')
         .select('student_id, date, status')
+        .eq('school_id', schoolId)
         .in('student_id', studentIds)
         .gte('date', startDate)
         .lte('date', endDate);
@@ -630,6 +650,7 @@ export class AnalyticsService {
    * تقرير المرحلة الكامل - يجمع جميع الفصول في مرحلة واحدة
    */
   static async getStageAttendanceReport(
+    schoolId: string,
     stageId: string,
     startDate: string,
     endDate: string
@@ -639,6 +660,7 @@ export class AnalyticsService {
       const { data: classes, error: classesError } = await supabase
         .from('classes')
         .select('id, name, stage_id, stages(id, name)')
+        .eq('school_id', schoolId)
         .eq('stage_id', stageId);
 
       if (classesError) throw classesError;
@@ -653,6 +675,7 @@ export class AnalyticsService {
       const { data: students, error: studentsError } = await supabase
         .from('students')
         .select('student_id, full_name_ar, class_id')
+        .eq('school_id', schoolId)
         .in('class_id', classIds)
         .not('class_id', 'is', null);
 
@@ -817,12 +840,13 @@ export class AnalyticsService {
   /**
    * تقرير المدرسة الكامل - يجمع جميع المراحل والفصول
    */
-  static async getSchoolAttendanceReport(startDate: string, endDate: string) {
+  static async getSchoolAttendanceReport(schoolId: string, startDate: string, endDate: string) {
     try {
       // جلب جميع المراحل
       const { data: stages, error: stagesError } = await supabase
         .from('stages')
         .select('id, name')
+        .eq('school_id', schoolId)
         .order('name');
 
       if (stagesError) throw stagesError;
@@ -834,7 +858,7 @@ export class AnalyticsService {
       // جلب تقرير كل مرحلة
       const stageReports = await Promise.all(
         stages.map(async (stage) => {
-          const report = await this.getStageAttendanceReport(stage.id, startDate, endDate);
+          const report = await this.getStageAttendanceReport(schoolId, stage.id, startDate, endDate);
           return {
             stageId: stage.id,
             stageName: stage.name,
@@ -877,11 +901,12 @@ export class AnalyticsService {
   /**
    * جلب معلومات المدرسة للترويسة الرسمية
    */
-  static async getSchoolInfo() {
+  static async getSchoolInfo(schoolId: string) {
     try {
       const { data, error } = await supabase
         .from('school_settings')
         .select('*')
+        .eq('school_id', schoolId)
         .single();
 
       if (error) {

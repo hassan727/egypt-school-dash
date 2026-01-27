@@ -10,7 +10,7 @@ interface DashboardLayoutProps {
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   return (
     <SidebarProvider defaultOpen>
-      <div className="min-h-screen flex w-full bg-background">
+      <div className="min-h-screen flex w-full bg-background" dir="rtl">
         <AppSidebar />
         <div className="flex-1 flex flex-col w-full">
           <DashboardHeader />

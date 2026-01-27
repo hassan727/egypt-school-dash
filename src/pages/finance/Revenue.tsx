@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { useGlobalFilter } from '@/context/GlobalFilterContext';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { FinanceNavigation } from '@/components/finance/FinanceNavigation';
@@ -55,6 +56,7 @@ const Revenue = () => {
 
   // استخدام السنة الدراسية من Context العام
   const { selectedYear, setSelectedYear, academicYears, loading: yearsLoading } = useGlobalFilter();
+  const schoolId = useSystemSchoolId();
 
   const {
     loading,
@@ -99,7 +101,7 @@ const Revenue = () => {
   // جلب مدفوعات الطلاب
   useEffect(() => {
     const fetchStudentPayments = async () => {
-      if (!selectedYear) return; // انتظر حتى يتم تحميل السنة الدراسية
+      if (!selectedYear || !schoolId) return; // انتظر حتى يتم تحميل السنة الدراسية والمدرسة
 
       try {
         setLoadingPayments(true);
@@ -119,6 +121,7 @@ const Revenue = () => {
                     `)
           .eq('transaction_type', 'دفعة')
           .eq('academic_year_code', selectedYear)
+          .eq('school_id', schoolId) // Enforce School Identity
           .order('transaction_date', { ascending: false });
 
         if (error) throw error;
@@ -140,7 +143,7 @@ const Revenue = () => {
     };
 
     fetchStudentPayments();
-  }, [selectedYear]);
+  }, [selectedYear, schoolId]);
 
   // إضافة إيراد جديد
   const handleAddRevenue = async () => {
@@ -190,9 +193,11 @@ const Revenue = () => {
 
     setIsSearching(true);
     try {
+      if (!schoolId) return;
       const { data, error } = await supabase
         .from('students')
         .select('id, student_id, full_name_ar, stage, class')
+        .eq('school_id', schoolId) // Enforce School Identity
         .or(`full_name_ar.ilike.%${term}%,student_id.ilike.%${term}%`)
         .limit(10);
 

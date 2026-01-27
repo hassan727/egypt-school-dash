@@ -12,17 +12,17 @@ import type { TeacherPersonalData, TeacherEmploymentData } from '@/types/teacher
 /**
  * صفحة تعيين معلم جديد - NewTeacher
  * مصممة بنفس نمط CreateStudentPage.tsx
+ * محدثة لاستخدام جدول employees بدلاً من teachers
  */
 
-// توليد رقم المعلم
-const generateTeacherId = () => {
-    const year = new Date().getFullYear();
+// توليد رقم الموظف (معلم)
+const generateEmployeeId = () => {
     const randomNum = Math.floor(Math.random() * 10000);
-    return `TCH${year}${randomNum.toString().padStart(4, '0')}`;
+    return `EMP${randomNum.toString().padStart(5, '0')}`;
 };
 
-// رقم المعلم يُنشأ مرة واحدة عند تحميل الصفحة
-const initialTeacherId = generateTeacherId();
+// رقم الموظف يُنشأ مرة واحدة عند تحميل الصفحة
+const initialEmployeeId = generateEmployeeId();
 
 const NewTeacher = () => {
     const navigate = useNavigate();
@@ -31,7 +31,7 @@ const NewTeacher = () => {
 
     // بيانات المعلم - teacherId موجود من البداية
     const [personalData, setPersonalData] = useState<TeacherPersonalData>({
-        teacherId: initialTeacherId,
+        teacherId: initialEmployeeId,
         fullNameAr: '',
         fullNameEn: '',
         nationalId: '',
@@ -56,8 +56,8 @@ const NewTeacher = () => {
     });
 
     const [employmentData, setEmploymentData] = useState<TeacherEmploymentData>({
-        teacherId: initialTeacherId,
-        employeeNumber: initialTeacherId,
+        teacherId: initialEmployeeId,
+        employeeNumber: initialEmployeeId,
         educationalRegistrationNumber: '',
         hireDate: new Date().toISOString().split('T')[0],
         contractStartDate: new Date().toISOString().split('T')[0],
@@ -130,77 +130,60 @@ const NewTeacher = () => {
         setIsSubmitting(true);
 
         try {
-            // إدخال بيانات المعلم - مطابق لـ teacher_schema.sql
-            const { error: teacherError } = await supabase
-                .from('teachers')
+            // إدخال بيانات المعلم في جدول employees
+            const { error: employeeError } = await supabase
+                .from('employees')
                 .insert({
-                    teacher_id: initialTeacherId,
-                    // البيانات الشخصية
-                    full_name_ar: personalData.fullNameAr,
-                    full_name_en: personalData.fullNameEn,
+                    employee_id: initialEmployeeId,
+                    full_name: personalData.fullNameAr,
                     national_id: personalData.nationalId,
-                    date_of_birth: personalData.dateOfBirth || null,
-                    place_of_birth: personalData.placeOfBirth,
-                    nationality: personalData.nationality,
-                    gender: personalData.gender,
-                    religion: personalData.religion,
-                    marital_status: personalData.maritalStatus,
-                    number_of_dependents: personalData.numberOfDependents,
+                    employee_type: 'معلم',
+                    position: employmentData.jobTitle,
+                    department: employmentData.department,
                     phone: personalData.phone,
-                    phone_secondary: personalData.phoneSecondary,
-                    whatsapp_number: personalData.whatsappNumber || personalData.phone,
                     email: personalData.email,
                     address: personalData.address,
-                    city: personalData.city,
-                    governorate: personalData.governorate,
-                    postal_code: personalData.postalCode,
-                    emergency_contact_name: personalData.emergencyContactName,
-                    emergency_contact_relation: personalData.emergencyContactRelation,
-                    emergency_contact_phone: personalData.emergencyContactPhone,
-                    // البيانات الوظيفية
-                    employee_number: employmentData.employeeNumber || initialTeacherId,
-                    educational_registration_number: employmentData.educationalRegistrationNumber,
                     hire_date: employmentData.hireDate,
-                    contract_start_date: employmentData.contractStartDate || employmentData.hireDate,
-                    contract_end_date: employmentData.contractEndDate || null,
                     contract_type: employmentData.contractType,
-                    employment_status: employmentData.employmentStatus,
-                    highest_qualification: employmentData.highestQualification,
-                    qualification_field: employmentData.qualificationField,
-                    qualification_university: employmentData.qualificationUniversity,
-                    qualification_year: employmentData.qualificationYear,
-                    teaching_certificate: employmentData.teachingCertificate,
-                    school_branch: employmentData.schoolBranch,
-                    department: employmentData.department,
-                    job_title: employmentData.jobTitle,
-                    specialization: employmentData.specialization,
-                    grade_levels_taught: employmentData.gradeLevelsTaught,
+                    base_salary: 0,
+                    bank_account: null,
+                    bank_name: null,
+                    is_active: employmentData.employmentStatus === 'نشط',
+                    birth_date: personalData.dateOfBirth || null,
+                    gender: personalData.gender,
+                    marital_status: personalData.maritalStatus,
+                    nationality: personalData.nationality,
+                    religion: personalData.religion,
+                    details: {
+                        fullNameEn: personalData.fullNameEn,
+                        placeOfBirth: personalData.placeOfBirth,
+                        numberOfDependents: personalData.numberOfDependents,
+                        phoneSecondary: personalData.phoneSecondary,
+                        whatsappNumber: personalData.whatsappNumber,
+                        city: personalData.city,
+                        governorate: personalData.governorate,
+                        postalCode: personalData.postalCode,
+                        emergencyContactName: personalData.emergencyContactName,
+                        emergencyContactRelation: personalData.emergencyContactRelation,
+                        emergencyContactPhone: personalData.emergencyContactPhone,
+                        educationalRegistrationNumber: employmentData.educationalRegistrationNumber,
+                        contractStartDate: employmentData.contractStartDate,
+                        contractEndDate: employmentData.contractEndDate,
+                        highestQualification: employmentData.highestQualification,
+                        qualificationField: employmentData.qualificationField,
+                        qualificationUniversity: employmentData.qualificationUniversity,
+                        qualificationYear: employmentData.qualificationYear,
+                        teachingCertificate: employmentData.teachingCertificate,
+                        schoolBranch: employmentData.schoolBranch,
+                        specialization: employmentData.specialization,
+                        gradeLevelsTaught: employmentData.gradeLevelsTaught,
+                    }
                 });
 
-            if (teacherError) throw teacherError;
-
-            // رصيد الإجازات
-            await supabase.from('teacher_leave_balances').insert({
-                teacher_id: initialTeacherId,
-                academic_year_code: '2025-2026',
-                annual_leave_balance: 21,
-                sick_leave_balance: 14,
-                emergency_leave_balance: 3,
-                casual_leave_balance: 6,
-            });
-
-            // سجل التدقيق
-            await supabase.from('teacher_audit_trail').insert({
-                teacher_id: initialTeacherId,
-                change_type: 'تسجيل جديد',
-                changed_fields: { action: 'create' },
-                new_values: { personalData, employmentData },
-                changed_by: 'system',
-                change_reason: 'تسجيل معلم جديد',
-            });
+            if (employeeError) throw employeeError;
 
             toast.success('تم تسجيل المعلم بنجاح!');
-            navigate(`/teacher/${initialTeacherId}/dashboard`);
+            navigate(`/teacher/${initialEmployeeId}/dashboard`);
 
         } catch (error: any) {
             console.error('Error:', error);
@@ -221,7 +204,7 @@ const NewTeacher = () => {
                         </div>
                         <div>
                             <h1 className="text-4xl font-bold text-gray-900 mb-2">📝 تعيين معلم جديد</h1>
-                            <p className="text-gray-600">رقم المعلم: <strong>{initialTeacherId}</strong></p>
+                            <p className="text-gray-600">رقم الموظف: <strong>{initialEmployeeId}</strong></p>
                         </div>
                     </div>
                 </div>

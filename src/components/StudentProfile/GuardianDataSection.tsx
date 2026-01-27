@@ -204,7 +204,6 @@ export function GuardianDataSection({ data, onSave, isReadOnly = false }: Guardi
                 </div>
 
                 {/* رقم الهاتف */}
-                {/* رقم الهاتف */}
                 <div className="space-y-4">
                     <SmartPhoneInput
                         id="guardian_phone"
@@ -215,6 +214,7 @@ export function GuardianDataSection({ data, onSave, isReadOnly = false }: Guardi
                             // If WhatsApp is empty or was same as phone, update it too if checked? 
                             // Easier to just let user click the checkbox or manual enter.
                         }}
+                        nationality={formData.nationality || 'مصري'}
                         required
                         disabled={isReadOnly || !isEditing}
                     />
@@ -247,6 +247,7 @@ export function GuardianDataSection({ data, onSave, isReadOnly = false }: Guardi
                             label=""
                             value={formData.whatsappNumber || ''}
                             onChange={(val) => handleChange('whatsappNumber', val)}
+                            nationality={formData.nationality || 'مصري'}
                             placeholder="أدخل رقم الواتساب"
                             disabled={isReadOnly || !isEditing}
                         />

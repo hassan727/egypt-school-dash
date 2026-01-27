@@ -106,6 +106,12 @@ interface AttendanceReportData {
     // معلومات إضافية
     selectedYear?: string;
     supervisorNotes?: string;
+    schoolInfo?: {
+        name: string;
+        logo_url?: string | null;
+        ministry_header?: string;
+        directorate?: string;
+    };
 }
 
 interface AttendanceReportPrintProps {
@@ -737,11 +743,11 @@ export const AttendanceReportPrint = ({ data, onClose }: AttendanceReportPrintPr
         <!-- ترويسة التقرير الجديدة - 3 أعمدة -->
         <div class="report-header">
             <div class="header-right">
-                <img src="/شعار المدرسة.jpg" alt="شعار المدرسة" class="school-logo" onerror="this.style.display='none'">
+                ${data.schoolInfo?.logo_url ? `<img src="${data.schoolInfo.logo_url}" alt="شعار المدرسة" class="school-logo">` : '<div style="height:60px"></div>'}
             </div>
             
             <div class="header-center">
-                <div class="school-name">مدرسة جاد الله</div>
+                <div class="school-name">${data.schoolInfo?.name || 'مدرسة جاد الله'}</div>
                 <div class="report-title">${getReportTitle()}</div>
                 <div class="report-subtitle">${getReportSubtitle()}</div>
             </div>

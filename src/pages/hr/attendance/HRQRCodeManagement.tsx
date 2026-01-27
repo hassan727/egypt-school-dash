@@ -11,13 +11,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { QRCodeSVG } from 'qrcode.react';
 import {
     QrCode, MapPin, Plus, Printer, Download, Trash2, Copy,
-    Check, AlertCircle, Building, Clock, Loader2
+    Check, AlertCircle, Building, Clock, Loader2, Edit, Star
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface Location {
     id: string;
@@ -26,6 +28,7 @@ interface Location {
     longitude: number;
     radius_meters: number;
     is_active: boolean;
+    is_default?: boolean;
 }
 
 interface QRCodeItem {
@@ -39,6 +42,7 @@ interface QRCodeItem {
 }
 
 const HRQRCodeManagement = () => {
+    const schoolId = useSystemSchoolId();
     const [locations, setLocations] = useState<Location[]>([]);
     const [qrCodes, setQRCodes] = useState<QRCodeItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -51,7 +55,33 @@ const HRQRCodeManagement = () => {
         latitude: '',
         longitude: '',
         radius_meters: '100',
+        is_default: false, // NEW: Default location checkbox
     });
+    const [smartPasteValue, setSmartPasteValue] = useState(''); // Smart paste field
+
+    // Edit Location Dialog
+    const [editLocationOpen, setEditLocationOpen] = useState(false);
+    const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+    const [editSmartPasteValue, setEditSmartPasteValue] = useState('');
+
+    // Smart Paste Handler
+    const handleSmartPaste = (value: string) => {
+        setSmartPasteValue(value);
+        // Extract coordinates from various formats:
+        // "30.002287,31.148932" or "30.002287, 31.148932" or from Google Maps links
+        const regex = /([-+]?[\d.]+)[,\s]+([-+]?[\d.]+)/;
+        const match = value.match(regex);
+        if (match) {
+            setNewLocation({
+                ...newLocation,
+                latitude: match[1],
+                longitude: match[2]
+            });
+            toast.success('تم استخراج الإحداثيات بنجاح ✅');
+        } else {
+            toast.error('تنسيق غير صحيح. استخدم: 30.002287,31.148932');
+        }
+    };
 
     // Generate QR Dialog
     const [generateQROpen, setGenerateQROpen] = useState(false);
@@ -63,17 +93,19 @@ const HRQRCodeManagement = () => {
     const [printQR, setPrintQR] = useState<QRCodeItem | null>(null);
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (schoolId) fetchData();
+    }, [schoolId]);
 
     const fetchData = async () => {
         try {
+            if (!schoolId) return;
             setLoading(true);
 
             // Fetch locations
             const { data: locs, error: locErr } = await supabase
                 .from('attendance_locations')
                 .select('*')
+                .eq('school_id', schoolId)
                 .eq('is_active', true)
                 .order('location_name');
 
@@ -84,6 +116,7 @@ const HRQRCodeManagement = () => {
             const { data: qrs, error: qrErr } = await supabase
                 .from('attendance_qr_codes')
                 .select('*, location:attendance_locations(*)')
+                .eq('school_id', schoolId)
                 .eq('is_active', true)
                 .order('created_at', { ascending: false });
 
@@ -105,24 +138,143 @@ const HRQRCodeManagement = () => {
             return;
         }
 
+        if (!schoolId) {
+            toast.error('لم يتم تحديد ID المدرسة. يرجى تسجيل الدخول مرة أخرى.');
+            return;
+        }
+
         try {
+            // If this is set as default, unset all others first
+            if (newLocation.is_default) {
+                await supabase
+                    .from('attendance_locations')
+                    .update({ is_default: false })
+                    .neq('id', '00000000-0000-0000-0000-000000000000'); // Update all
+            }
+
             const { error } = await supabase.from('attendance_locations').insert({
+                school_id: schoolId,
                 location_name: newLocation.location_name,
                 latitude: parseFloat(newLocation.latitude) || 30.0444, // Default Cairo
                 longitude: parseFloat(newLocation.longitude) || 31.2357,
                 radius_meters: parseInt(newLocation.radius_meters) || 100,
                 is_active: true,
+                is_default: newLocation.is_default,
             });
 
             if (error) throw error;
 
             toast.success('تم إضافة الموقع بنجاح');
             setAddLocationOpen(false);
-            setNewLocation({ location_name: '', latitude: '', longitude: '', radius_meters: '100' });
+            setNewLocation({ location_name: '', latitude: '', longitude: '', radius_meters: '100', is_default: false });
+            setSmartPasteValue(''); // Reset smart paste
             fetchData();
         } catch (error: any) {
             console.error('Error adding location:', error);
             toast.error('فشل في إضافة الموقع');
+        }
+    };
+
+    // Smart Paste Handler for Edit Dialog
+    const handleEditSmartPaste = (value: string) => {
+        setEditSmartPasteValue(value);
+        if (!editingLocation) return;
+        // Extract coordinates from various formats:
+        // "30.002287,31.148932" or "30.002287, 31.148932" or from Google Maps links
+        const regex = /([-+]?[\d.]+)[,\s]+([-+]?[\d.]+)/;
+        const match = value.match(regex);
+        if (match) {
+            setEditingLocation({
+                ...editingLocation,
+                latitude: parseFloat(match[1]),
+                longitude: parseFloat(match[2])
+            });
+            toast.success('تم استخراج الإحداثيات بنجاح ✅');
+        } else {
+            toast.error('تنسيق غير صحيح. استخدم: 30.002287,31.148932');
+        }
+    };
+
+    // Edit Location - Open dialog with pre-filled data
+    const handleEditLocation = (location: Location) => {
+        setEditingLocation({
+            id: location.id,
+            location_name: location.location_name,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            radius_meters: location.radius_meters,
+            is_default: location.is_default,
+            is_active: location.is_active
+        });
+        setEditSmartPasteValue(''); // Reset smart paste field
+        setEditLocationOpen(true);
+    };
+
+    // Update Location - Save changes
+    const handleUpdateLocation = async () => {
+        if (!editingLocation) return;
+
+        try {
+            // If this is set as default, unset all others first
+            if (editingLocation.is_default) {
+                await supabase
+                    .from('attendance_locations')
+                    .update({ is_default: false })
+                    .neq('id', editingLocation.id)
+                    .eq('school_id', schoolId);
+            }
+
+            const { error } = await supabase
+                .from('attendance_locations')
+                .update({
+                    location_name: editingLocation.location_name,
+                    latitude: editingLocation.latitude,
+                    longitude: editingLocation.longitude,
+                    radius_meters: editingLocation.radius_meters,
+                    is_default: editingLocation.is_default,
+                })
+                .eq('id', editingLocation.id);
+
+            if (error) throw error;
+
+            toast.success('تم تحديث الموقع بنجاح');
+            setEditLocationOpen(false);
+            setEditingLocation(null);
+            fetchData();
+        } catch (error: any) {
+            console.error('Error updating location:', error);
+            toast.error('فشل في تحديث الموقع');
+        }
+    };
+
+    // Delete Location - Soft delete with confirmation
+    const handleDeleteLocation = async (locationId: string) => {
+        // Check if location has associated QR codes
+        const qrCodesCount = qrCodes.filter(qr => qr.location_id === locationId).length;
+
+        if (qrCodesCount > 0) {
+            const confirmed = confirm(
+                `هذا الموقع مرتبط بـ ${qrCodesCount} رمز QR. هل أنت متأكد من الحذف؟`
+            );
+            if (!confirmed) return;
+        } else {
+            if (!confirm('هل أنت متأكد من حذف هذا الموقع؟')) return;
+        }
+
+        try {
+            // Soft delete: set is_active to false
+            const { error } = await supabase
+                .from('attendance_locations')
+                .update({ is_active: false })
+                .eq('id', locationId);
+
+            if (error) throw error;
+
+            toast.success('تم حذف الموقع بنجاح');
+            fetchData();
+        } catch (error: any) {
+            console.error('Error deleting location:', error);
+            toast.error('فشل في حذف الموقع');
         }
     };
 
@@ -142,6 +294,7 @@ const HRQRCodeManagement = () => {
                 qr_code_data: qrData,
                 qr_type: selectedQRType,
                 is_active: true,
+                school_id: schoolId,
             });
 
             if (error) throw error;
@@ -492,17 +645,49 @@ const HRQRCodeManagement = () => {
                             ) : (
                                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {locations.map((loc) => (
-                                        <Card key={loc.id} className="p-4">
+                                        <Card key={loc.id} className="p-4 hover:shadow-lg transition-shadow">
                                             <div className="flex items-start gap-3">
-                                                <div className="p-3 bg-purple-100 rounded-lg">
+                                                <div className="p-3 bg-purple-100 rounded-lg relative">
                                                     <Building className="h-6 w-6 text-purple-600" />
+                                                    {loc.is_default && (
+                                                        <div className="absolute -top-1 -right-1 bg-yellow-400 rounded-full p-1">
+                                                            <Star className="h-3 w-3 text-white fill-white" />
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="flex-1">
-                                                    <h3 className="font-bold">{loc.location_name}</h3>
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <h3 className="font-bold flex-1">{loc.location_name}</h3>
+                                                        {loc.is_default && (
+                                                            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold">
+                                                                افتراضي
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <p className="text-sm text-gray-500">نصف القطر: {loc.radius_meters} متر</p>
                                                     <p className="text-xs text-gray-400 mt-1 font-mono">
                                                         {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
                                                     </p>
+                                                    <div className="flex gap-2 mt-3">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="flex-1"
+                                                            onClick={() => handleEditLocation(loc)}
+                                                        >
+                                                            <Edit className="h-3.5 w-3.5 ml-1" />
+                                                            تعديل
+                                                        </Button>
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="flex-1"
+                                                            onClick={() => handleDeleteLocation(loc.id)}
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5 ml-1" />
+                                                            حذف
+                                                        </Button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </Card>
@@ -534,6 +719,26 @@ const HRQRCodeManagement = () => {
                                     placeholder="مثال: البوابة الرئيسية"
                                 />
                             </div>
+
+                            {/* Smart Paste Field */}
+                            <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200 space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-2 bg-purple-600 rounded-lg">
+                                        <MapPin className="h-4 w-4 text-white" />
+                                    </div>
+                                    <label className="text-sm font-bold text-purple-900">📍 اللصق الذكي من Google Maps</label>
+                                </div>
+                                <Input
+                                    placeholder="الصق هنا: 30.002287,31.148932"
+                                    value={smartPasteValue}
+                                    onChange={(e) => handleSmartPaste(e.target.value)}
+                                    className="bg-white border-purple-300 text-center font-mono text-lg"
+                                />
+                                <p className="text-xs text-purple-700 text-center">
+                                    ✨ انسخ الإحداثيات من خرائط جوجل والصقها هنا - سيتم استخراج خط العرض والطول تلقائياً
+                                </p>
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-sm font-medium">خط العرض (اختياري)</label>
@@ -565,10 +770,122 @@ const HRQRCodeManagement = () => {
                                 />
                                 <p className="text-xs text-gray-500 mt-1">المسافة القصوى المسموح بها لتسجيل الحضور</p>
                             </div>
+                            <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                                <Switch
+                                    checked={newLocation.is_default}
+                                    onCheckedChange={(checked) => setNewLocation({ ...newLocation, is_default: checked })}
+                                />
+                                <div className="flex-1">
+                                    <label className="text-sm font-semibold text-purple-900">تعيين كموقع افتراضي للمدرسة</label>
+                                    <p className="text-xs text-purple-600 mt-0.5">
+                                        سيتم استخدامه للتحقق من السياج الجغرافي في صفحة الإعدادات
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button variant="outline" onClick={() => setAddLocationOpen(false)}>إلغاء</Button>
                             <Button onClick={handleAddLocation}>إضافة الموقع</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Edit Location Dialog */}
+                <Dialog open={editLocationOpen} onOpenChange={setEditLocationOpen}>
+                    <DialogContent className="max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Edit className="h-5 w-5" />
+                                تعديل الموقع
+                            </DialogTitle>
+                            <DialogDescription>
+                                قم بتحديث بيانات الموقع حسب الحاجة
+                            </DialogDescription>
+                        </DialogHeader>
+                        {editingLocation && (
+                            <div className="space-y-4 py-4">
+                                <div>
+                                    <label className="text-sm font-medium">اسم الموقع *</label>
+                                    <Input
+                                        value={editingLocation.location_name}
+                                        onChange={(e) => setEditingLocation({ ...editingLocation, location_name: e.target.value })}
+                                        placeholder="مثال: البوابة الرئيسية"
+                                    />
+                                </div>
+
+                                {/* Smart Paste Field */}
+                                <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-2 bg-purple-600 rounded-lg">
+                                            <MapPin className="h-4 w-4 text-white" />
+                                        </div>
+                                        <label className="text-sm font-bold text-purple-900">📍 اللصق الذكي من Google Maps</label>
+                                    </div>
+                                    <Input
+                                        placeholder="الصق هنا: 30.002287,31.148932"
+                                        value={editSmartPasteValue}
+                                        onChange={(e) => handleEditSmartPaste(e.target.value)}
+                                        className="bg-white border-purple-300 text-center font-mono text-lg"
+                                    />
+                                    <p className="text-xs text-purple-700 text-center">
+                                        ✨ انسخ الإحداثيات من خرائط جوجل والصقها هنا - سيتم استخراج خط العرض والطول تلقائياً
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-sm font-medium">خط العرض</label>
+                                        <Input
+                                            type="number"
+                                            step="any"
+                                            value={editingLocation.latitude}
+                                            onChange={(e) => setEditingLocation({ ...editingLocation, latitude: parseFloat(e.target.value) || 0 })}
+                                            placeholder="30.0444"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-medium">خط الطول</label>
+                                        <Input
+                                            type="number"
+                                            step="any"
+                                            value={editingLocation.longitude}
+                                            onChange={(e) => setEditingLocation({ ...editingLocation, longitude: parseFloat(e.target.value) || 0 })}
+                                            placeholder="31.2357"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-medium">نصف القطر المسموح (بالمتر)</label>
+                                    <Input
+                                        type="number"
+                                        value={editingLocation.radius_meters}
+                                        onChange={(e) => setEditingLocation({ ...editingLocation, radius_meters: parseInt(e.target.value) || 100 })}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">المسافة القصوى المسموح بها لتسجيل الحضور</p>
+                                </div>
+                                <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                                    <Switch
+                                        checked={editingLocation.is_default || false}
+                                        onCheckedChange={(checked) => setEditingLocation({ ...editingLocation, is_default: checked })}
+                                    />
+                                    <div className="flex-1">
+                                        <label className="text-sm font-semibold text-purple-900 flex items-center gap-2">
+                                            <Star className="h-4 w-4 text-yellow-600" />
+                                            تعيين كموقع افتراضي للمدرسة
+                                        </label>
+                                        <p className="text-xs text-purple-600 mt-0.5">
+                                            سيتم استخدامه للتحقق من السياج الجغرافي في صفحة الإعدادات
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setEditLocationOpen(false)}>إلغاء</Button>
+                            <Button onClick={handleUpdateLocation}>
+                                <Check className="h-4 w-4 ml-2" />
+                                حفظ التعديلات
+                            </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>

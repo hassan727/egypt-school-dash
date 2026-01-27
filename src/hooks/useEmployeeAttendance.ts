@@ -5,6 +5,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { attendanceService } from '@/services/attendanceService';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 // Types
 export interface Employee {
@@ -34,6 +36,7 @@ export interface AttendanceRecord {
     permission_type: string | null;
     is_locked: boolean;
     notes: string | null;
+    deduction_amount?: number;
     // Joined employee data
     employee?: Employee;
 }
@@ -79,6 +82,7 @@ interface UseEmployeeAttendanceOptions {
 }
 
 export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}) {
+    const schoolId = useSystemSchoolId();
     const today = new Date().toISOString().split('T')[0];
 
     const [records, setRecords] = useState<AttendanceRecord[]>([]);
@@ -125,9 +129,12 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
     // Fetch employees
     const fetchEmployees = useCallback(async () => {
         try {
+            if (!schoolId) return;
+
             const { data, error } = await supabase
                 .from('employees')
-                .select('id, employee_id, full_name, position, department, employee_type, is_active')
+                .select('id, employee_id, full_name, position, department, employee_type, is_active, shift_id')
+                .eq('school_id', schoolId)
                 .eq('is_active', true)
                 .order('full_name');
 
@@ -137,11 +144,12 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
             console.error('Error fetching employees:', err);
             setError(err.message);
         }
-    }, []);
+    }, [schoolId]);
 
     // Fetch attendance records
     const fetchAttendanceRecords = useCallback(async () => {
         try {
+            if (!schoolId) return;
             setLoading(true);
             setError(null);
 
@@ -151,8 +159,9 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
                 .from('employee_attendance')
                 .select(`
           *,
-          employee:employees(id, employee_id, full_name, position, department, employee_type)
+          employee:employees(id, employee_id, full_name, position, department, employee_type, shift_id)
         `)
+                .eq('school_id', schoolId)
                 .gte('date', startDate)
                 .lte('date', endDate)
                 .order('date', { ascending: false });
@@ -178,7 +187,7 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
         } finally {
             setLoading(false);
         }
-    }, [selectedDate, dateRangeType, getDateRange]);
+    }, [selectedDate, dateRangeType, getDateRange, schoolId]);
 
     // Create attendance record
     const createAttendanceRecord = useCallback(async (
@@ -188,58 +197,15 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
         checkOutTime?: string
     ) => {
         try {
-            // Get employee shift for scheduled times
-            const { data: shift } = await supabase
-                .from('employee_shifts')
-                .select('start_time, end_time, grace_period_minutes')
-                .eq('employee_id', employeeId)
-                .eq('is_active', true)
-                .single();
-
-            const scheduledStart = shift?.start_time || '08:00:00';
-            const scheduledEnd = shift?.end_time || '15:00:00';
-            const gracePeriod = shift?.grace_period_minutes || 15;
-
-            // Calculate status and late minutes
-            let status: AttendanceRecord['status'] = 'غائب';
-            let lateMinutes = 0;
-            let workedHours = 0;
-
-            if (checkInTime) {
-                const checkIn = new Date(`${date}T${checkInTime}`);
-                const scheduled = new Date(`${date}T${scheduledStart}`);
-                const graceTime = new Date(scheduled.getTime() + gracePeriod * 60000);
-
-                if (checkIn <= graceTime) {
-                    status = 'حاضر';
-                } else {
-                    status = 'متأخر';
-                    lateMinutes = Math.floor((checkIn.getTime() - scheduled.getTime()) / 60000);
-                }
-
-                if (checkOutTime) {
-                    const checkOut = new Date(`${date}T${checkOutTime}`);
-                    workedHours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-                }
-            }
-
-            const { data, error } = await supabase
-                .from('employee_attendance')
-                .upsert({
-                    employee_id: employeeId,
-                    date,
-                    check_in_time: checkInTime,
-                    check_out_time: checkOutTime,
-                    scheduled_start: scheduledStart,
-                    scheduled_end: scheduledEnd,
-                    status,
-                    late_minutes: lateMinutes,
-                    worked_hours: Math.round(workedHours * 100) / 100,
-                }, { onConflict: 'employee_id,date' })
-                .select()
-                .single();
-
-            if (error) throw error;
+            const data = await attendanceService.recordAttendance(
+                employeeId,
+                date,
+                date,
+                checkInTime,
+                checkOutTime,
+                {},
+                schoolId
+            );
 
             toast.success('تم تسجيل الحضور بنجاح');
             await fetchAttendanceRecords();
@@ -249,7 +215,7 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
             toast.error('فشل في تسجيل الحضور');
             throw err;
         }
-    }, [fetchAttendanceRecords]);
+    }, [fetchAttendanceRecords, schoolId]);
 
     // Update attendance record with audit trail
     const updateAttendanceRecord = useCallback(async (
@@ -264,6 +230,7 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
                 .from('employee_attendance')
                 .select('*')
                 .eq('id', attendanceId)
+                .eq('school_id', schoolId)
                 .single();
 
             if (fetchError) throw fetchError;
@@ -279,6 +246,7 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
                 .from('employee_attendance')
                 .update(updates)
                 .eq('id', attendanceId)
+                .eq('school_id', schoolId)
                 .select()
                 .single();
 
@@ -329,6 +297,7 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
                     locked_at: lock ? new Date().toISOString() : null,
                     locked_by: lock ? lockedBy : null,
                 })
+                .eq('school_id', schoolId)
                 .gte('date', startDate)
                 .lte('date', endDate);
 
@@ -386,6 +355,45 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
 
     // Get unique departments for filter
     const departments = [...new Set(employees.map(e => e.department).filter(Boolean))];
+
+    // ذكي: حساب ملخص الحضور الشهري الديناميكي
+    const getMonthlyAttendanceSummary = useCallback((
+        employeeId: string,
+        month?: string // YYYY-MM format, default to current month
+    ) => {
+        const targetMonth = month || new Date().toISOString().substring(0, 7);
+
+        const monthRecords = records.filter(r => {
+            const recordMonth = r.date.substring(0, 7);
+            return r.employee_id === employeeId && recordMonth === targetMonth;
+        });
+
+        const presentDays = monthRecords.filter(r => r.status === 'حاضر').length;
+        const lateDays = monthRecords.filter(r => r.status === 'متأخر').length;
+        const absentDays = monthRecords.filter(r => r.status === 'غائب').length;
+        const leaveDays = monthRecords.filter(r => r.status === 'إجازة').length;
+        const permissionDays = monthRecords.filter(r => r.status === 'إذن' || r.status === 'مأمورية').length;
+
+        const totalLateMinutes = monthRecords.reduce((sum, r) => sum + (r.late_minutes || 0), 0);
+        const totalEarlyLeaveMinutes = monthRecords.reduce((sum, r) => sum + (r.early_leave_minutes || 0), 0);
+        const totalOvertimeMinutes = monthRecords.reduce((sum, r) => sum + (r.overtime_minutes || 0), 0);
+        const totalWorkedHours = monthRecords.reduce((sum, r) => sum + (r.worked_hours || 0), 0);
+
+        return {
+            presentDays,
+            lateDays,
+            absentDays,
+            leaveDays,
+            permissionDays,
+            totalLateMinutes,
+            totalEarlyLeaveMinutes,
+            totalOvertimeMinutes,
+            totalWorkedHours: Math.round(totalWorkedHours * 10) / 10,
+            totalRecords: monthRecords.length,
+            month: targetMonth,
+            allRecords: monthRecords,
+        };
+    }, [records]);
 
     // Financial calculations for employee
     const calculateEmployeeFinancials = useCallback((
@@ -478,6 +486,7 @@ export function useEmployeeAttendance(options: UseEmployeeAttendanceOptions = {}
         lockPeriod,
         getModificationHistory,
         calculateEmployeeFinancials,
+        getMonthlyAttendanceSummary,
         getDateRange,
 
         // Helpers

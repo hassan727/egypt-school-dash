@@ -37,8 +37,11 @@ interface AttendancePrintReportProps {
         onLeave: number;
         onPermission: number;
     };
+    ministryHeader?: string;
+    directorate?: string;
     organizationName?: string;
     organizationLogo?: string;
+    academicYear?: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -51,7 +54,7 @@ const statusLabels: Record<string, string> = {
 };
 
 export const AttendancePrintReport = forwardRef<HTMLDivElement, AttendancePrintReportProps>(
-    ({ records, dateRange, reportType, stats, organizationName = 'مدرسة مصر', organizationLogo }, ref) => {
+    ({ records, dateRange, reportType, stats, organizationName = 'المدرسة', organizationLogo, ministryHeader, directorate, academicYear }, ref) => {
         const reportTypeLabels: Record<string, string> = {
             daily: 'تقرير الحضور اليومي',
             weekly: 'تقرير الحضور الأسبوعي',
@@ -72,8 +75,32 @@ export const AttendancePrintReport = forwardRef<HTMLDivElement, AttendancePrintR
 
         return (
             <div ref={ref} className="print-report bg-white p-8 max-w-[210mm] mx-auto" dir="rtl">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b-2 border-gray-800 pb-4 mb-6">
+                {/* Header - Official Style */}
+                <div className="hidden print:block print-official-header mb-6">
+                    <div className="print-header-row flex justify-between items-center border-b-2 border-black pb-4">
+                        <div className="text-right">
+                            <p className="font-bold text-sm">{ministryHeader || 'وزارة التربية والتعليم'}</p>
+                            <p className="font-bold text-sm">{directorate || 'مديرية التربية والتعليم'}</p>
+                        </div>
+                        <div className="text-center">
+                            <h1 className="text-xl font-bold mb-2">{organizationName}</h1>
+                            {organizationLogo && (
+                                <img src={organizationLogo} alt="Logo" className="h-16 w-auto mx-auto object-contain" />
+                            )}
+                        </div>
+                        <div className="text-left">
+                            <p className="text-sm">عام دراسي: {academicYear || new Date().getFullYear()}</p>
+                            <p className="text-sm">تاريخ الطباعة: {printDate}</p>
+                        </div>
+                    </div>
+                    <div className="text-center bg-gray-100 py-2 mt-2 border border-black">
+                        <h2 className="text-lg font-bold">{reportTypeLabels[reportType]}</h2>
+                        <p className="text-xs">{formatReportDate()}</p>
+                    </div>
+                </div>
+
+                {/* Screen Header (Hidden in Print) */}
+                <div className="print:hidden flex items-center justify-between border-b-2 border-gray-800 pb-4 mb-6">
                     <div className="flex items-center gap-4">
                         {organizationLogo ? (
                             <img src={organizationLogo} alt="Logo" className="h-16 w-16 object-contain" />
@@ -189,7 +216,7 @@ export const AttendancePrintReport = forwardRef<HTMLDivElement, AttendancePrintR
             .print-report {
               width: 100%;
               max-width: none;
-              padding: 10mm;
+              padding: 0;
               font-size: 10pt;
             }
             @page {
@@ -199,6 +226,16 @@ export const AttendancePrintReport = forwardRef<HTMLDivElement, AttendancePrintR
             body {
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+            }
+            .print-official-header {
+                display: block !important;
+                width: 100%;
+            }
+            .print-header-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                width: 100%;
             }
           }
         `}</style>

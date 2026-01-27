@@ -301,10 +301,10 @@ export function HierarchicalGradeForm({
             {step1_academicYear && (
                 <Card className="p-4 bg-blue-50 border-blue-200">
                     <div className="text-sm font-medium text-gray-700 space-y-1">
-                        <div>📅 السنة: {year?.yearNameAr}</div>
-                        {semester && <div>📆 الفصل: {semester.semesterNameAr}</div>}
-                        {subject && <div>📚 المادة: {subject.subjectNameAr}</div>}
-                        {assessment && <div>📌 النوع: {assessment.assessmentNameAr}</div>}
+                        <div>📅 السنة: {year?.year_name_ar}</div>
+                        {semester && <div>📆 الفصل: {semester.semester_name_ar}</div>}
+                        {subject && <div>📚 المادة: {subject.subject_name_ar}</div>}
+                        {assessment && <div>📌 النوع: {assessment.assessment_name_ar}</div>}
                         {step5_date && <div>📅 التاريخ: {step5_date}</div>}
                     </div>
                 </Card>
@@ -338,7 +338,7 @@ export function HierarchicalGradeForm({
                             <SelectContent>
                                 {academicYears.map(year => (
                                     <SelectItem key={year.id} value={year.id}>
-                                        {year.yearNameAr}
+                                        {year.year_name_ar}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -356,7 +356,7 @@ export function HierarchicalGradeForm({
                             <SelectContent>
                                 {semesters.map(sem => (
                                     <SelectItem key={sem.id} value={sem.id}>
-                                        {sem.semesterNameAr}
+                                        {sem.semester_name_ar}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -374,7 +374,7 @@ export function HierarchicalGradeForm({
                             <SelectContent>
                                 {subjects.map(subj => (
                                     <SelectItem key={subj.id} value={subj.id}>
-                                        {subj.subjectNameAr}
+                                        {subj.subject_name_ar}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -392,7 +392,7 @@ export function HierarchicalGradeForm({
                             <SelectContent>
                                 {assessmentTypes.map(type => (
                                     <SelectItem key={type.id} value={type.id}>
-                                        {type.assessmentNameAr}
+                                        {type.assessment_name_ar}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

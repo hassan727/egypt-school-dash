@@ -58,10 +58,8 @@ export const ManualReportsService = {
     /**
      * حفظ تقرير يدوي جديد مع جميع الإدخالات
      */
-    /**
-     * حفظ تقرير يدوي جديد مع جميع الإدخالات (Atomic Transaction)
-     */
     async saveReport(
+        schoolId: string,
         entries: ManualAttendanceEntry[],
         reportDate: string,
         academicYearCode: string,
@@ -77,6 +75,7 @@ export const ManualReportsService = {
             const absenceRate = totalEnrolled > 0 ? Math.round((totalAbsent / totalEnrolled) * 100) : 0;
 
             const { data: reportId, error } = await supabase.rpc('save_manual_report_transaction', {
+                p_school_id: schoolId,
                 p_report_id: null,
                 p_report_date: reportDate,
                 p_academic_year_code: academicYearCode,
@@ -101,12 +100,9 @@ export const ManualReportsService = {
 
     /**
      * جلب قائمة التقارير المحفوظة (ملخص)
-     */
-    /**
-     * جلب قائمة التقارير المحفوظة (ملخص)
      * @param academicYearCode - إذا تم تمرير القيمة، سيتم الفلترة بها. إذا كانت فارغة أو null، سيتم جلب الكل.
      */
-    async getReportsList(academicYearCode?: string | null): Promise<ManualReportSummary[]> {
+    async getReportsList(schoolId: string, academicYearCode?: string | null): Promise<ManualReportSummary[]> {
         try {
             let query = supabase
                 .from('manual_attendance_reports')
@@ -122,6 +118,7 @@ export const ManualReportsService = {
           absence_rate,
           created_at
         `)
+                .eq('school_id', schoolId)
                 .order('report_date', { ascending: false });
 
             if (academicYearCode && academicYearCode !== 'all') {
@@ -157,12 +154,13 @@ export const ManualReportsService = {
     /**
      * جلب تقرير كامل مع الإدخالات
      */
-    async getReportById(reportId: string): Promise<ManualAttendanceReport | null> {
+    async getReportById(schoolId: string, reportId: string): Promise<ManualAttendanceReport | null> {
         try {
             // جلب التقرير
             const { data: report, error: reportError } = await supabase
                 .from('manual_attendance_reports')
                 .select('*')
+                .eq('school_id', schoolId)
                 .eq('id', reportId)
                 .single();
 
@@ -190,12 +188,13 @@ export const ManualReportsService = {
     /**
      * حذف تقرير
      */
-    async deleteReport(reportId: string): Promise<boolean> {
+    async deleteReport(schoolId: string, reportId: string): Promise<boolean> {
         try {
             // الإدخالات ستُحذف تلقائياً بسبب ON DELETE CASCADE
             const { error } = await supabase
                 .from('manual_attendance_reports')
                 .delete()
+                .eq('school_id', schoolId)
                 .eq('id', reportId);
 
             if (error) throw error;
@@ -208,11 +207,11 @@ export const ManualReportsService = {
 
     /**
      * تحديث تقرير موجود
-     */
     /**
      * تحديث تقرير موجود (Atomic Transaction)
      */
     async updateReport(
+        schoolId: string,
         reportId: string,
         entries: ManualAttendanceEntry[],
         reportTitle?: string,
@@ -227,6 +226,7 @@ export const ManualReportsService = {
             const absenceRate = totalEnrolled > 0 ? Math.round((totalAbsent / totalEnrolled) * 100) : 0;
 
             const { error } = await supabase.rpc('save_manual_report_transaction', {
+                p_school_id: schoolId,
                 p_report_id: reportId,
                 p_report_date: new Date().toISOString(), // Date might be needed but not critical for update if not changing date
                 p_academic_year_code: '', // Not changing year on update usually

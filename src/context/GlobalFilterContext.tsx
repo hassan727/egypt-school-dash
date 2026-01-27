@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSystem } from './SystemContext';
 
 interface GlobalFilterContextType {
     selectedYear: string;
@@ -23,27 +24,52 @@ export const GlobalFilterProvider = ({ children }: { children: ReactNode }) => {
     const [stagesClasses, setStagesClasses] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const { identity, setAcademicYear: setSystemYear } = useSystem();
+    const schoolId = identity.school?.id;
+
+    // Sync selected year to SystemContext
+    useEffect(() => {
+        if (selectedYear) {
+            setSystemYear(selectedYear);
+        }
+    }, [selectedYear, setSystemYear]);
+
     useEffect(() => {
         const fetchFilterData = async () => {
+            if (!schoolId) {
+                setAcademicYears([]);
+                setStagesClasses([]);
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
                 // Fetch Years
                 const { data: years } = await supabase
                     .from('academic_years')
                     .select('*')
+                    .eq('school_id', schoolId)
                     .order('year_code', { ascending: true });
 
                 if (years && years.length > 0) {
                     setAcademicYears(years);
                     // Set default year to active one or first one
                     const activeYear = years.find((y: any) => y.is_active);
-                    setSelectedYear(activeYear ? activeYear.year_code : years[0].year_code);
+                    const defaultYear = activeYear ? activeYear.year_code : years[0].year_code;
+                    setSelectedYear(defaultYear);
+                } else {
+                    setAcademicYears([]);
+                    setSelectedYear('');
                 }
 
                 // Fetch Stages & Classes (New Schema)
+                // Filter classes by school_id via the join or direct column if available.
+                // Assuming classes table has school_id.
                 const { data: classesData, error } = await supabase
                     .from('classes')
-                    .select('id, name, stage_id, stages(id, name)');
+                    .select('id, name, stage_id, stages(id, name)')
+                    .eq('school_id', schoolId);
 
                 if (error) {
                     console.error('Error fetching classes:', error);
@@ -56,6 +82,8 @@ export const GlobalFilterProvider = ({ children }: { children: ReactNode }) => {
                         stage_id: cls.stages?.id
                     }));
                     setStagesClasses(mappedData);
+                } else {
+                    setStagesClasses([]);
                 }
             } catch (error) {
                 console.error('Error fetching filter data:', error);
@@ -65,7 +93,7 @@ export const GlobalFilterProvider = ({ children }: { children: ReactNode }) => {
         };
 
         fetchFilterData();
-    }, []);
+    }, [schoolId]);
 
     // Reset class when stage changes
     useEffect(() => {

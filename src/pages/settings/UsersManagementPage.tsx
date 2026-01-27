@@ -128,13 +128,20 @@ export default function UsersManagementPage() {
         setLoading(true);
         try {
             // Load users with school name
-            const { data: usersData, error: usersError } = await supabase
+            let usersQuery = supabase
                 .from('system_users')
                 .select(`
                     *,
                     schools(school_name)
                 `)
                 .order('created_at', { ascending: false });
+
+            // If not system admin, restrict to own school
+            if (user?.role !== 'admin' && user?.schoolId) {
+                usersQuery = usersQuery.eq('school_id', user.schoolId);
+            }
+
+            const { data: usersData, error: usersError } = await usersQuery;
 
             if (usersError) throw usersError;
 
@@ -146,11 +153,17 @@ export default function UsersManagementPage() {
             setUsers(processedUsers);
 
             // Load schools for dropdown
-            const { data: schoolsData } = await supabase
+            let schoolsQuery = supabase
                 .from('schools')
                 .select('id, school_name, school_code')
                 .eq('is_active', true)
                 .order('school_name');
+
+            if (user?.role !== 'admin' && user?.schoolId) {
+                schoolsQuery = schoolsQuery.eq('id', user.schoolId);
+            }
+
+            const { data: schoolsData } = await schoolsQuery;
 
             setSchools(schoolsData || []);
         } catch (error) {

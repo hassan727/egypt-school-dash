@@ -5,7 +5,8 @@
  * 🔐 Security: All data access goes through this hook
  */
 
-import { useAuth, useCurrentSchoolId, useIsDemoMode } from '@/context/AuthContext';
+import { useAuth, useIsDemoMode } from '@/context/AuthContext';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { supabase } from '@/lib/supabase';
 
 // =============================================
@@ -28,7 +29,7 @@ const DEMO_SCHOOLS = [
 
 export function useTenantStudents() {
     const { isAuthenticated, validateTenantAccess, user } = useAuth();
-    const schoolId = useCurrentSchoolId();
+    const schoolId = useSystemSchoolId();
     const isDemoMode = useIsDemoMode();
 
     const fetchStudents = async () => {
@@ -169,7 +170,7 @@ export function useTenantSchools() {
 
 export function useTenantQuery<T = any>(tableName: string) {
     const { isAuthenticated, validateTenantAccess, user } = useAuth();
-    const schoolId = useCurrentSchoolId();
+    const schoolId = useSystemSchoolId();
     const isDemoMode = useIsDemoMode();
 
     const query = async (options?: {

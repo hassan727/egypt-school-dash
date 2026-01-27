@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 export interface BatchStudent {
     id: string;
@@ -24,6 +25,7 @@ export interface BatchStudent {
 }
 
 export function useBatchStudents(classId: string | null, stageId?: string | null) {
+    const schoolId = useSystemSchoolId();
     const [students, setStudents] = useState<BatchStudent[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -63,10 +65,10 @@ export function useBatchStudents(classId: string | null, stageId?: string | null
         `);
 
             if (classId) {
-                query = query.eq('class_id', classId);
+                query = query.eq('class_id', classId).eq('school_id', schoolId);
             } else if (stageId) {
                 // Filter by stage_id on the joined classes table
-                query = query.eq('classes.stage_id', stageId);
+                query = query.eq('classes.stage_id', stageId).eq('school_id', schoolId);
             }
 
             // Sorting: Boys ('ذكر') first (Descending because 'ذ' > 'أ'), then Alphabetical
@@ -101,8 +103,8 @@ export function useBatchStudents(classId: string | null, stageId?: string | null
     };
 
     useEffect(() => {
-        fetchStudents();
-    }, [classId, stageId]);
+        if (schoolId) fetchStudents();
+    }, [classId, stageId, schoolId]);
 
     return { students, isLoading, error, refetch: fetchStudents };
 }

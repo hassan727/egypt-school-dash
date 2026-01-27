@@ -11,12 +11,14 @@ import { RefundCalculationDetailedForm } from '@/components/RefundCalculationDet
 import { StudentService } from '@/services/studentService';
 import type { Refund } from '@/types/student';
 import { createRefundFromCalculation, type RefundCalculationResult } from '@/utils/refundCalculation';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 export default function RefundProcessingPage() {
     const { studentId } = useParams<{ studentId: string }>();
     const navigate = useNavigate();
+    const schoolId = useSystemSchoolId();
     const [selectedYear, setSelectedYear] = useState<string>('');
-    
+
     const {
         studentProfile,
         loading,
@@ -58,14 +60,20 @@ export default function RefundProcessingPage() {
         try {
             setFormLoading(true);
 
-            const createdRefund = await StudentService.createRefundRequest(refundData);
+            if (!schoolId) {
+                toast.error('لم يتم تحديد المدرسة');
+                setFormLoading(false);
+                return;
+            }
+
+            const createdRefund = await StudentService.createRefundRequest(schoolId, refundData);
 
             if (createdRefund.id && calculationResult?.deductions.length) {
                 const deductionsWithRefundId = calculationResult.deductions.map(d => ({
                     ...d,
                     refundId: createdRefund.id
                 }));
-                await StudentService.addRefundDeductions(deductionsWithRefundId);
+                await StudentService.addRefundDeductions(schoolId, deductionsWithRefundId);
             }
 
             setSubmitSuccess(true);

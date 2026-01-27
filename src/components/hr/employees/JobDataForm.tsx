@@ -1,13 +1,18 @@
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EMPLOYEE_ROLES } from '@/data/employeeConstants';
+import { supabase } from '@/lib/supabase';
 
 export interface JobData {
     job_title: string;
+    employee_role: string;
     employee_type: string;
     contract_type: string;
     hire_date: string;
     status: string;
+    shift_id?: string;
 }
 
 interface JobDataFormProps {
@@ -17,8 +22,40 @@ interface JobDataFormProps {
 }
 
 export const JobDataForm = ({ data, onChange, isReadOnly = false }: JobDataFormProps) => {
+    const [shifts, setShifts] = useState<any[]>([]);
+
+    useEffect(() => {
+        const fetchShifts = async () => {
+            const { data: shiftsData } = await supabase
+                .from('hr_shifts')
+                .select('id, name')
+                .eq('is_active', true);
+            if (shiftsData) setShifts(shiftsData);
+        };
+        fetchShifts();
+    }, []);
+
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+                <Label htmlFor="employee_role">نوع الموظف الرئيسي</Label>
+                <Select
+                    value={data.employee_role}
+                    onValueChange={(v) => onChange('employee_role', v)}
+                    disabled={isReadOnly}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="اختر نوع الموظف" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {EMPLOYEE_ROLES.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>
+                                {role.icon} {role.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
             <div className="space-y-2">
                 <Label htmlFor="job_title">المسمى الوظيفي</Label>
                 <Input
@@ -38,6 +75,25 @@ export const JobDataForm = ({ data, onChange, isReadOnly = false }: JobDataFormP
                     onChange={(e) => onChange('hire_date', e.target.value)}
                     disabled={isReadOnly}
                 />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="shift_id">الوردية</Label>
+                <Select
+                    value={data.shift_id}
+                    onValueChange={(v) => onChange('shift_id', v)}
+                    disabled={isReadOnly}
+                >
+                    <SelectTrigger>
+                        <SelectValue placeholder="اختر الوردية" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {shifts.map((shift) => (
+                            <SelectItem key={shift.id} value={shift.id}>
+                                {shift.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="employee_type">نظام العمل</Label>

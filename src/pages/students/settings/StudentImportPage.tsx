@@ -44,10 +44,13 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { processExcelData, ImportReferenceData, ImportContext, generateSmartTemplate, convertRawDataToJSON } from '@/utils/excelImport';
 import { useGlobalFilter } from '@/context/GlobalFilterContext';
-import { getDefaultSchoolId } from '@/services/authService';
+import { useSystemSchoolId } from '@/context/SystemContext';
+import { IdentityGuard } from '@/components/IdentityGuard';
 
 export default function StudentImportPage() {
     const { selectedYear } = useGlobalFilter();
+    const schoolId = useSystemSchoolId(); // Enforced by SystemContext
+
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
     const [file, setFile] = useState<File | null>(null);
     const [previewData, setPreviewData] = useState<any[]>([]);
@@ -61,7 +64,6 @@ export default function StudentImportPage() {
     const [selectedSheet, setSelectedSheet] = useState<string>('');
     const [availableSheets, setAvailableSheets] = useState<string[]>([]);
     const [workbookData, setWorkbookData] = useState<string>('');
-    const [schoolId, setSchoolId] = useState<string>('');
 
     // Reference data
     const [refData, setRefData] = useState<ImportReferenceData>({
@@ -69,25 +71,56 @@ export default function StudentImportPage() {
         classes: []
     });
 
-    // Load reference data and default school
+    // Load reference data
     useEffect(() => {
         const fetchData = async () => {
-            // Fetch stages and classes
-            const { data: stages } = await supabase.from('stages').select('*').order('name');
-            const { data: classes } = await supabase.from('classes').select('*, stages(name)');
+            if (!schoolId) return;
+
+            // Fetch stages for CURRENT SCHOOL only
+            const { data: stages } = await supabase
+                .from('stages')
+                .select('*')
+                .eq('school_id', schoolId)
+                .order('name');
+
+            // Fetch classes for CURRENT SCHOOL only
+            // Note: Classes are linked to stages, but good to double filter or rely on stage filter
+            const { data: classes } = await supabase
+                .from('classes')
+                .select('*, stages!inner(school_id)') // Ensure related stage is in this school
+                .eq('stages.school_id', schoolId)
+                .order('name');
+
+            // Fallback simple query if complex relation join fails or isn't needed
+            // Actually simpler: classes usually have school_id or are linked to stages with school_id.
+            // Let's assume classes might not have school_id direct column in some schemas, but usually they do.
+            // If classes have school_id: .eq('school_id', schoolId)
+            // Checking previous schema files... 20251221000001_cleanup_stages_classes.sql
+            // It seems classes reference stages. Stages reference schools.
+            // So we fetch classes where stage is in this school.
+
+            // Simplified fetch: Get all classes, client filter? No, server filter best.
+            // Let's rely on the stages we just fetched for filtering in UI, 
+            // but for DB safety, fetch classes linked to these stages.
+
+            const stageIds = stages?.map(s => s.id) || [];
+
+            let classesData: any[] = [];
+            if (stageIds.length > 0) {
+                const { data: classes } = await supabase
+                    .from('classes')
+                    .select('*, stages(name)')
+                    .in('stage_id', stageIds); // Only classes for valid stages
+                classesData = classes || [];
+            }
+
             setRefData({
                 stages: stages || [],
-                classes: classes || []
+                classes: classesData
             });
-
-            // Fetch default school
-            const defSchoolId = await getDefaultSchoolId();
-            if (defSchoolId) {
-                setSchoolId(defSchoolId);
-            }
         };
         fetchData();
-    }, []);
+    }, [schoolId]);
 
     // Filter classes by stage
     const filteredClasses = refData.classes.filter(c => c.stage_id === selectedStage);
@@ -255,280 +288,282 @@ export default function StudentImportPage() {
                 description="استيراد بيانات الطلاب بشكل جماعي من ملف Excel"
                 showBackButton
             >
-                {/* Info Alert */}
-                <Alert className="mb-6 border-blue-200 bg-blue-50">
-                    <Info className="h-5 w-5 text-blue-600" />
-                    <AlertTitle className="text-blue-800">إنشاء الحسابات تلقائي</AlertTitle>
-                    <AlertDescription className="text-blue-700">
-                        <ul className="list-disc list-inside mt-2 space-y-1">
-                            <li>عند استيراد الطلاب، يتم إنشاء حسابات تسجيل الدخول تلقائيًا</li>
-                            <li>اسم المستخدم = الرقم القومي (14 رقم)</li>
-                            <li>كلمة المرور = آخر 6 أرقام من الرقم القومي</li>
-                            <li>لا يُسمح باستيراد اسم مستخدم أو كلمة مرور من Excel</li>
-                        </ul>
-                    </AlertDescription>
-                </Alert>
+                <IdentityGuard>
+                    {/* Info Alert */}
+                    <Alert className="mb-6 border-blue-200 bg-blue-50">
+                        <Info className="h-5 w-5 text-blue-600" />
+                        <AlertTitle className="text-blue-800">إنشاء الحسابات تلقائي</AlertTitle>
+                        <AlertDescription className="text-blue-700">
+                            <ul className="list-disc list-inside mt-2 space-y-1">
+                                <li>عند استيراد الطلاب، يتم إنشاء حسابات تسجيل الدخول تلقائيًا</li>
+                                <li>اسم المستخدم = الرقم القومي (14 رقم)</li>
+                                <li>كلمة المرور = آخر 6 أرقام من الرقم القومي</li>
+                                <li>لا يُسمح باستيراد اسم مستخدم أو كلمة مرور من Excel</li>
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
 
-                {/* Step 1: Select & Upload */}
-                {step === 1 && (
-                    <div className="space-y-6">
-                        {/* Selection */}
+                    {/* Step 1: Select & Upload */}
+                    {step === 1 && (
+                        <div className="space-y-6">
+                            {/* Selection */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <FileSpreadsheet className="h-5 w-5" />
+                                        الخطوة 1: اختر البيانات المطلوبة
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>السنة الدراسية</Label>
+                                            <Input value={selectedYear} disabled className="bg-muted" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>المرحلة</Label>
+                                            <Select value={selectedStage} onValueChange={setSelectedStage}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="اختر المرحلة" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {refData.stages.map(stage => (
+                                                        <SelectItem key={stage.id} value={stage.id}>
+                                                            {stage.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>الفصل</Label>
+                                            <Select
+                                                value={selectedClass}
+                                                onValueChange={setSelectedClass}
+                                                disabled={!selectedStage}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="اختر الفصل" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {filteredClasses.map(cls => (
+                                                        <SelectItem key={cls.id} value={cls.id}>
+                                                            {cls.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 pt-4 border-t">
+                                        <Button
+                                            variant="outline"
+                                            onClick={downloadTemplate}
+                                            disabled={!selectedStage || !selectedClass}
+                                        >
+                                            <Download className="h-4 w-4 ml-2" />
+                                            تحميل النموذج
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Upload */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Upload className="h-5 w-5" />
+                                        الخطوة 2: رفع الملف
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div
+                                        className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept=".xlsx,.xls"
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                            disabled={!selectedStage || !selectedClass}
+                                        />
+                                        <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                                        <p className="text-lg font-medium mb-2">اسحب الملف هنا أو انقر للاختيار</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            يدعم ملفات Excel (xlsx, xls)
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
+                    {/* Step 2: Sheet Selection */}
+                    {step === 2 && (
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <FileSpreadsheet className="h-5 w-5" />
-                                    الخطوة 1: اختر البيانات المطلوبة
-                                </CardTitle>
+                                <CardTitle>اختر الورقة المطلوبة</CardTitle>
+                                <CardDescription>
+                                    الملف يحتوي على عدة أوراق، اختر الورقة التي تريد استيرادها
+                                </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>السنة الدراسية</Label>
-                                        <Input value={selectedYear} disabled className="bg-muted" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>المرحلة</Label>
-                                        <Select value={selectedStage} onValueChange={setSelectedStage}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="اختر المرحلة" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {refData.stages.map(stage => (
-                                                    <SelectItem key={stage.id} value={stage.id}>
-                                                        {stage.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>الفصل</Label>
-                                        <Select
-                                            value={selectedClass}
-                                            onValueChange={setSelectedClass}
-                                            disabled={!selectedStage}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="اختر الفصل" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {filteredClasses.map(cls => (
-                                                    <SelectItem key={cls.id} value={cls.id}>
-                                                        {cls.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-3 pt-4 border-t">
+                                <Select value={selectedSheet} onValueChange={setSelectedSheet}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="اختر ورقة" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableSheets.map(sheet => (
+                                            <SelectItem key={sheet} value={sheet}>
+                                                {sheet}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <div className="flex gap-3">
+                                    <Button variant="outline" onClick={resetForm}>
+                                        إلغاء
+                                    </Button>
                                     <Button
-                                        variant="outline"
-                                        onClick={downloadTemplate}
-                                        disabled={!selectedStage || !selectedClass}
+                                        onClick={() => parseSelectedSheet(workbookData, selectedSheet)}
+                                        disabled={!selectedSheet}
                                     >
-                                        <Download className="h-4 w-4 ml-2" />
-                                        تحميل النموذج
+                                        متابعة
                                     </Button>
                                 </div>
                             </CardContent>
                         </Card>
+                    )}
 
-                        {/* Upload */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Upload className="h-5 w-5" />
-                                    الخطوة 2: رفع الملف
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div
-                                    className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        onChange={handleFileChange}
-                                        className="hidden"
-                                        disabled={!selectedStage || !selectedClass}
-                                    />
-                                    <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                                    <p className="text-lg font-medium mb-2">اسحب الملف هنا أو انقر للاختيار</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        يدعم ملفات Excel (xlsx, xls)
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
+                    {/* Step 3: Preview */}
+                    {step === 3 && (
+                        <div className="space-y-6">
+                            {/* Stats */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <Card className="bg-green-50 border-green-200">
+                                    <CardContent className="p-4 flex items-center gap-3">
+                                        <CheckCircle className="h-8 w-8 text-green-600" />
+                                        <div>
+                                            <p className="text-sm text-green-700">سجلات صالحة</p>
+                                            <p className="text-2xl font-bold text-green-800">{previewData.length}</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card className="bg-red-50 border-red-200">
+                                    <CardContent className="p-4 flex items-center gap-3">
+                                        <AlertTriangle className="h-8 w-8 text-red-600" />
+                                        <div>
+                                            <p className="text-sm text-red-700">سجلات بها أخطاء</p>
+                                            <p className="text-2xl font-bold text-red-800">{failedData.length}</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
 
-                {/* Step 2: Sheet Selection */}
-                {step === 2 && (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>اختر الورقة المطلوبة</CardTitle>
-                            <CardDescription>
-                                الملف يحتوي على عدة أوراق، اختر الورقة التي تريد استيرادها
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <Select value={selectedSheet} onValueChange={setSelectedSheet}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="اختر ورقة" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableSheets.map(sheet => (
-                                        <SelectItem key={sheet} value={sheet}>
-                                            {sheet}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            {/* Preview Table */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>معاينة البيانات</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="overflow-x-auto max-h-96">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>الاسم</TableHead>
+                                                    <TableHead>الرقم القومي</TableHead>
+                                                    <TableHead>النوع</TableHead>
+                                                    <TableHead>ولي الأمر</TableHead>
+                                                    <TableHead>الحساب</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {previewData.slice(0, 10).map((row, idx) => (
+                                                    <TableRow key={idx}>
+                                                        <TableCell className="font-medium">{row.full_name_ar}</TableCell>
+                                                        <TableCell className="font-mono">{row.national_id}</TableCell>
+                                                        <TableCell>{row.gender}</TableCell>
+                                                        <TableCell>{row.guardian_full_name || '-'}</TableCell>
+                                                        <TableCell>
+                                                            {row.national_id?.length === 14 ? (
+                                                                <Badge className="bg-green-100 text-green-700 border-0">
+                                                                    <Key className="h-3 w-3 ml-1" />
+                                                                    سيُنشأ
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="outline">لا يوجد</Badge>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                        {previewData.length > 10 && (
+                                            <p className="text-center text-sm text-muted-foreground mt-4">
+                                                ... و {previewData.length - 10} سجل آخر
+                                            </p>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Actions */}
                             <div className="flex gap-3">
                                 <Button variant="outline" onClick={resetForm}>
                                     إلغاء
                                 </Button>
                                 <Button
-                                    onClick={() => parseSelectedSheet(workbookData, selectedSheet)}
-                                    disabled={!selectedSheet}
+                                    onClick={handleImport}
+                                    disabled={uploading || previewData.length === 0}
+                                    className="flex-1"
                                 >
-                                    متابعة
+                                    {uploading ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                                            جاري الاستيراد...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="h-4 w-4 ml-2" />
+                                            استيراد {previewData.length} طالب
+                                        </>
+                                    )}
                                 </Button>
                             </div>
-                        </CardContent>
-                    </Card>
-                )}
-
-                {/* Step 3: Preview */}
-                {step === 3 && (
-                    <div className="space-y-6">
-                        {/* Stats */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <Card className="bg-green-50 border-green-200">
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <CheckCircle className="h-8 w-8 text-green-600" />
-                                    <div>
-                                        <p className="text-sm text-green-700">سجلات صالحة</p>
-                                        <p className="text-2xl font-bold text-green-800">{previewData.length}</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                            <Card className="bg-red-50 border-red-200">
-                                <CardContent className="p-4 flex items-center gap-3">
-                                    <AlertTriangle className="h-8 w-8 text-red-600" />
-                                    <div>
-                                        <p className="text-sm text-red-700">سجلات بها أخطاء</p>
-                                        <p className="text-2xl font-bold text-red-800">{failedData.length}</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
                         </div>
+                    )}
 
-                        {/* Preview Table */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>معاينة البيانات</CardTitle>
-                            </CardHeader>
+                    {/* Step 4: Success */}
+                    {step === 4 && (
+                        <Card className="text-center py-12">
                             <CardContent>
-                                <div className="overflow-x-auto max-h-96">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>الاسم</TableHead>
-                                                <TableHead>الرقم القومي</TableHead>
-                                                <TableHead>النوع</TableHead>
-                                                <TableHead>ولي الأمر</TableHead>
-                                                <TableHead>الحساب</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {previewData.slice(0, 10).map((row, idx) => (
-                                                <TableRow key={idx}>
-                                                    <TableCell className="font-medium">{row.full_name_ar}</TableCell>
-                                                    <TableCell className="font-mono">{row.national_id}</TableCell>
-                                                    <TableCell>{row.gender}</TableCell>
-                                                    <TableCell>{row.guardian_full_name || '-'}</TableCell>
-                                                    <TableCell>
-                                                        {row.national_id?.length === 14 ? (
-                                                            <Badge className="bg-green-100 text-green-700 border-0">
-                                                                <Key className="h-3 w-3 ml-1" />
-                                                                سيُنشأ
-                                                            </Badge>
-                                                        ) : (
-                                                            <Badge variant="outline">لا يوجد</Badge>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                    {previewData.length > 10 && (
-                                        <p className="text-center text-sm text-muted-foreground mt-4">
-                                            ... و {previewData.length - 10} سجل آخر
-                                        </p>
-                                    )}
+                                <div className="w-20 h-20 mx-auto mb-6 bg-green-100 rounded-full flex items-center justify-center">
+                                    <FileCheck className="h-10 w-10 text-green-600" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-green-700 mb-2">
+                                    تم الاستيراد بنجاح!
+                                </h3>
+                                <p className="text-muted-foreground mb-6">
+                                    تم استيراد {previewData.length} طالب وإنشاء حساباتهم تلقائيًا
+                                </p>
+                                <div className="flex gap-3 justify-center">
+                                    <Button variant="outline" onClick={resetForm}>
+                                        استيراد آخر
+                                    </Button>
+                                    <Button asChild>
+                                        <a href="/students/settings/accounts">
+                                            <Users className="h-4 w-4 ml-2" />
+                                            عرض الحسابات
+                                        </a>
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
-
-                        {/* Actions */}
-                        <div className="flex gap-3">
-                            <Button variant="outline" onClick={resetForm}>
-                                إلغاء
-                            </Button>
-                            <Button
-                                onClick={handleImport}
-                                disabled={uploading || previewData.length === 0}
-                                className="flex-1"
-                            >
-                                {uploading ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                                        جاري الاستيراد...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Upload className="h-4 w-4 ml-2" />
-                                        استيراد {previewData.length} طالب
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Step 4: Success */}
-                {step === 4 && (
-                    <Card className="text-center py-12">
-                        <CardContent>
-                            <div className="w-20 h-20 mx-auto mb-6 bg-green-100 rounded-full flex items-center justify-center">
-                                <FileCheck className="h-10 w-10 text-green-600" />
-                            </div>
-                            <h3 className="text-2xl font-bold text-green-700 mb-2">
-                                تم الاستيراد بنجاح!
-                            </h3>
-                            <p className="text-muted-foreground mb-6">
-                                تم استيراد {previewData.length} طالب وإنشاء حساباتهم تلقائيًا
-                            </p>
-                            <div className="flex gap-3 justify-center">
-                                <Button variant="outline" onClick={resetForm}>
-                                    استيراد آخر
-                                </Button>
-                                <Button asChild>
-                                    <a href="/students/settings/accounts">
-                                        <Users className="h-4 w-4 ml-2" />
-                                        عرض الحسابات
-                                    </a>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
+                    )}
+                </IdentityGuard>
             </PageLayout>
         </DashboardLayout>
     );

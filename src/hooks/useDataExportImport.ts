@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface ImportResult {
     success: boolean;
@@ -64,12 +65,14 @@ const sortStudents = (students: any[]): any[] => {
 export function useDataExportImport() {
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
+    const schoolId = useSystemSchoolId();
 
     /**
      * تصدير البيانات بصيغة CSV
      */
     const exportToCSV = async (fieldsToExport: string[], options?: ExportOptions) => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
             setProgress(10);
             setError(null);
 
@@ -82,7 +85,8 @@ export function useDataExportImport() {
                         name,
                         stages (name)
                     )
-                `);
+                `)
+                .eq('school_id', schoolId); // Enforce School Identity
 
             // تطبيق الفلاتر
             if (options?.academicYear) {
@@ -95,7 +99,8 @@ export function useDataExportImport() {
                 const { data: stageClasses } = await supabase
                     .from('classes')
                     .select('id')
-                    .eq('stage_id', options.stageId);
+                    .eq('stage_id', options.stageId)
+                    .eq('school_id', schoolId); // Enforce School Identity
 
                 if (stageClasses && stageClasses.length > 0) {
                     const classIds = stageClasses.map(c => c.id);
@@ -238,6 +243,7 @@ export function useDataExportImport() {
      */
     const exportToJSON = async (fieldsToExport: string[], options?: ExportOptions) => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
             setProgress(10);
             setError(null);
 
@@ -250,7 +256,8 @@ export function useDataExportImport() {
                         name,
                         stages (name)
                     )
-                `);
+                `)
+                .eq('school_id', schoolId); // Enforce School Identity
 
             // تطبيق الفلاتر
             if (options?.academicYear) {
@@ -262,7 +269,8 @@ export function useDataExportImport() {
                 const { data: stageClasses } = await supabase
                     .from('classes')
                     .select('id')
-                    .eq('stage_id', options.stageId);
+                    .eq('stage_id', options.stageId)
+                    .eq('school_id', schoolId); // Enforce School Identity
 
                 if (stageClasses && stageClasses.length > 0) {
                     const classIds = stageClasses.map(c => c.id);
@@ -359,6 +367,7 @@ export function useDataExportImport() {
      */
     const importFromFile = async (file: File, context?: ImportContext): Promise<ImportResult> => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
             setProgress(10);
             setError(null);
 
@@ -375,6 +384,7 @@ export function useDataExportImport() {
                 // تحويل الهيكل إلى هيكل قاعدة البيانات
                 studentsToImport = studentsToImport.map(item => ({
                     student_id: item.student_id || `STU${Date.now()}${Math.floor(Math.random() * 1000)}`,
+                    school_id: schoolId, // Enforce School Identity
                     full_name_ar: item.full_name_ar || item.personal?.full_name_ar,
                     national_id: item.national_id || item.personal?.national_id,
                     gender: item.gender || item.personal?.gender || 'ذكر',
@@ -409,6 +419,7 @@ export function useDataExportImport() {
 
                     studentsToImport.push({
                         student_id: record['معرف_الطالب'] || `STU${Date.now()}${Math.floor(Math.random() * 1000)}`,
+                        school_id: schoolId, // Enforce School Identity
                         full_name_ar: record['الاسم_الكامل'] || record['الاسم'],
                         national_id: record['الرقم_القومي'],
                         gender: record['النوع'] || 'ذكر',

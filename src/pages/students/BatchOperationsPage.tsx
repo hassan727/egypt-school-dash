@@ -2,6 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useBatchContext } from "@/components/batch/BatchContext";
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import {
 
 const BatchOperationsPage = () => {
     const { classId, className, stageName } = useBatchContext();
+    const schoolId = useSystemSchoolId();
     const navigate = useNavigate();
     const [stats, setStats] = React.useState({
         totalStudents: 0,
@@ -41,6 +43,7 @@ const BatchOperationsPage = () => {
                     .from('students')
                     .select('*', { count: 'exact', head: true })
                     .eq('class_id', classId)
+                    .eq('school_id', schoolId)
                     .eq('registration_status', 'active');
 
                 if (countError) throw countError;
@@ -53,6 +56,7 @@ const BatchOperationsPage = () => {
                     .from('students')
                     .select('student_id')
                     .eq('class_id', classId)
+                    .eq('school_id', schoolId)
                     .eq('registration_status', 'active');
 
                 const studentIds = studentsInClass?.map(s => s.student_id) || [];
@@ -67,6 +71,7 @@ const BatchOperationsPage = () => {
                         .from('attendance_records')
                         .select('*', { count: 'exact', head: true })
                         .in('student_id', studentIds)
+                        .eq('school_id', schoolId)
                         .eq('date', today)
                         .eq('status', 'حاضر');
 
@@ -75,6 +80,7 @@ const BatchOperationsPage = () => {
                         .from('attendance_records')
                         .select('*', { count: 'exact', head: true })
                         .in('student_id', studentIds)
+                        .eq('school_id', schoolId)
                         .eq('date', today)
                         .eq('status', 'غائب');
 
@@ -83,6 +89,7 @@ const BatchOperationsPage = () => {
                         .from('behavioral_records')
                         .select('*', { count: 'exact', head: true })
                         .in('student_id', studentIds)
+                        .eq('school_id', schoolId)
                         .eq('disciplinary_issues', true);
 
                     attendanceRate = studentCount && attendedToday
@@ -107,7 +114,7 @@ const BatchOperationsPage = () => {
         };
 
         fetchStats();
-    }, [classId]);
+    }, [classId, schoolId]);
 
     const navigateTo = (path: string) => {
         if (classId) {

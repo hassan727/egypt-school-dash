@@ -2,7 +2,7 @@
  * صفحة سجل البصمة الشامل - نظام الموارد البشرية
  * Comprehensive Fingerprint Attendance System - HR
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,9 +18,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import {
     Clock, Search, Download, Calendar, UserCheck, UserX, AlertTriangle,
     Loader2, Edit2, Lock, Unlock, Printer, User, Building2, ChevronLeft, ChevronRight,
-    CalendarDays, CalendarRange, FileText, X, Smartphone, QrCode
+    CalendarDays, CalendarRange, FileText, X, Smartphone, QrCode, Settings, RefreshCw, BarChart2
 } from 'lucide-react';
 import { useEmployeeAttendance, AttendanceRecord, DateRangeType } from '@/hooks/useEmployeeAttendance';
+import { exportAttendanceToExcel } from '@/utils/exportAttendanceToExcel';
+import { generateAttendanceAlerts, calculateAdvancedStats } from '@/utils/attendanceAnalysis';
 import { toast } from 'sonner';
 
 // Status styling configuration
@@ -65,6 +67,7 @@ const HRDailyAttendance = () => {
         lockPeriod,
         getModificationHistory,
         getDateRange,
+        getMonthlyAttendanceSummary,
     } = useEmployeeAttendance();
 
     // Edit dialog state
@@ -79,8 +82,52 @@ const HRDailyAttendance = () => {
     });
 
     // Employee profile dialog state
+    interface EmployeeData {
+        id: string;
+        employee_id: string;
+        full_name: string;
+        position: string;
+        department: string;
+        employee_type: string;
+    }
+
+    interface MonthlySummary {
+        presentDays: number;
+        lateDays: number;
+        absentDays: number;
+        leaveDays: number;
+        permissionDays: number;
+        totalLateMinutes: number;
+        totalEarlyLeaveMinutes: number;
+        totalOvertimeMinutes: number;
+        totalWorkedHours: number;
+        totalRecords: number;
+        month: string;
+        allRecords: AttendanceRecord[];
+    }
+
     const [profileDialogOpen, setProfileDialogOpen] = useState(false);
-    const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+    const [selectedEmployee, setSelectedEmployee] = useState<EmployeeData | null>(null);
+    const [employeeMonthlySummary, setEmployeeMonthlySummary] = useState<MonthlySummary | null>(null);
+
+    // Smart alerts and advanced stats
+    const [alerts, setAlerts] = useState<Array<{
+        id: string;
+        type: 'warning' | 'danger' | 'info' | 'success';
+        title: string;
+        message: string;
+        severity: number;
+        affectedCount: number;
+    }>>([]);
+    const [advancedStats, setAdvancedStats] = useState<{
+        averageLateMinutes: number;
+        averageWorkedHours: number;
+        absenteeRatePercent: number;
+        lateRatePercent: number;
+        mostLateEmployee?: { name: string; lateMinutes: number; lateCount: number };
+        highestAbsenteeEmployee?: { name: string; absentDays: number };
+        departmentStats: Record<string, { present: number; late: number; absent: number; rate: number }>;
+    } | null>(null);
 
     // Print ref
     const printRef = useRef<HTMLDivElement>(null);
@@ -142,11 +189,38 @@ const HRDailyAttendance = () => {
         }
     };
 
-    // Handle employee profile click
-    const handleEmployeeClick = (employee: any) => {
+    // ذكي: حساب ملخص الموظف الشهري عند فتح الملف
+    const handleEmployeeClick = (employee: EmployeeData) => {
         setSelectedEmployee(employee);
+        if (employee?.id) {
+            const summary = getMonthlyAttendanceSummary(employee.id) as MonthlySummary;
+            setEmployeeMonthlySummary(summary);
+        }
         setProfileDialogOpen(true);
     };
+
+    // ذكي: تحديث الملخص عند تغيير الموظف المحدد أو البيانات
+    useEffect(() => {
+        if (selectedEmployee?.id && profileDialogOpen) {
+            const summary = getMonthlyAttendanceSummary(selectedEmployee.id) as MonthlySummary;
+            setEmployeeMonthlySummary(summary);
+        }
+    }, [selectedEmployee?.id, profileDialogOpen, records, getMonthlyAttendanceSummary]);
+
+    // ذكي جداً: حساب التنبيهات والإحصائيات المتقدمة عند تغيير البيانات
+    useEffect(() => {
+        if (records.length > 0) {
+            try {
+                const generatedAlerts = generateAttendanceAlerts(records, stats);
+                setAlerts(generatedAlerts);
+
+                const advStats = calculateAdvancedStats(records);
+                setAdvancedStats(advStats);
+            } catch (error) {
+                console.error('خطأ في حساب التنبيهات:', error);
+            }
+        }
+    }, [records, stats]);
 
     // Handle print
     const handlePrint = () => {
@@ -212,13 +286,31 @@ const HRDailyAttendance = () => {
                         <Link to="/hr/attendance/mobile">
                             <Button variant="outline" className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100">
                                 <Smartphone className="h-4 w-4 ml-2" />
-                                تسجيل من الجوال
+                                تسجيل جوال
                             </Button>
                         </Link>
                         <Link to="/hr/attendance/qr">
                             <Button variant="outline" className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100">
                                 <QrCode className="h-4 w-4 ml-2" />
-                                إدارة رموز QR
+                                رموز QR
+                            </Button>
+                        </Link>
+                        <Link to="/hr/attendance/shifts">
+                            <Button variant="outline" className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100">
+                                <RefreshCw className="h-4 w-4 ml-2" />
+                                الورديات
+                            </Button>
+                        </Link>
+                        <Link to="/hr/attendance/reports">
+                            <Button variant="outline" className="bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100">
+                                <BarChart2 className="h-4 w-4 ml-2" />
+                                تقارير
+                            </Button>
+                        </Link>
+                        <Link to="/hr/attendance/settings">
+                            <Button variant="outline" className="bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100">
+                                <Settings className="h-4 w-4 ml-2" />
+                                إعدادات
                             </Button>
                         </Link>
                         <Button variant="outline" onClick={handlePrint}>
@@ -238,12 +330,62 @@ const HRDailyAttendance = () => {
                                 </>
                             )}
                         </Button>
-                        <Button>
+                        <Button 
+                            onClick={async () => {
+                                try {
+                                    const { startDate, endDate } = getDateRange(selectedDate, dateRangeType);
+                                    await exportAttendanceToExcel(records, stats, {
+                                        dateRange: { startDate, endDate },
+                                        filters: {
+                                            status: statusFilter === 'all' ? undefined : statusFilter,
+                                            department: departmentFilter === 'all' ? undefined : departmentFilter,
+                                        },
+                                    });
+                                    toast.success('تم تصدير البيانات بنجاح');
+                                } catch (error) {
+                                    toast.error('فشل في تصدير البيانات');
+                                }
+                            }}
+                        >
                             <Download className="h-4 w-4 ml-2" />
                             تصدير Excel
                         </Button>
                     </div>
                 </div>
+
+                {/* Smart Alerts Section */}
+                {alerts.length > 0 && (
+                    <div className="space-y-2">
+                        {alerts.map((alert) => (
+                            <Card 
+                                key={alert.id}
+                                className={`p-4 border-l-4 ${
+                                    alert.type === 'danger' ? 'bg-red-50 border-red-500' :
+                                    alert.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
+                                    alert.type === 'info' ? 'bg-blue-50 border-blue-500' :
+                                    'bg-green-50 border-green-500'
+                                }`}
+                            >
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <h4 className={`font-bold ${
+                                            alert.type === 'danger' ? 'text-red-700' :
+                                            alert.type === 'warning' ? 'text-yellow-700' :
+                                            alert.type === 'info' ? 'text-blue-700' :
+                                            'text-green-700'
+                                        }`}>
+                                            {alert.title}
+                                        </h4>
+                                        <p className="text-sm text-gray-700 mt-1">{alert.message}</p>
+                                    </div>
+                                    <Badge variant="outline" className="ml-2">
+                                        {alert.affectedCount}
+                                    </Badge>
+                                </div>
+                            </Card>
+                        ))}
+                    </div>
+                )}
 
                 {/* Statistics Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -314,6 +456,56 @@ const HRDailyAttendance = () => {
                         </div>
                     </Card>
                 </div>
+
+                {/* Advanced Statistics Cards */}
+                {advancedStats && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <Card className="p-4 bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-cyan-500 rounded-lg">
+                                    <Clock className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-cyan-600">معدل التأخير</p>
+                                    <p className="text-2xl font-bold text-cyan-900">{advancedStats.averageLateMinutes} د</p>
+                                </div>
+                            </div>
+                        </Card>
+                        <Card className="p-4 bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-teal-500 rounded-lg">
+                                    <Clock className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-teal-600">متوسط الساعات</p>
+                                    <p className="text-2xl font-bold text-teal-900">{advancedStats.averageWorkedHours} س</p>
+                                </div>
+                            </div>
+                        </Card>
+                        <Card className="p-4 bg-gradient-to-br from-pink-50 to-pink-100 border-pink-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-pink-500 rounded-lg">
+                                    <AlertTriangle className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-pink-600">نسبة الغياب</p>
+                                    <p className="text-2xl font-bold text-pink-900">{advancedStats.absenteeRatePercent}%</p>
+                                </div>
+                            </div>
+                        </Card>
+                        <Card className="p-4 bg-gradient-to-br from-rose-50 to-rose-100 border-rose-200">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-rose-500 rounded-lg">
+                                    <AlertTriangle className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-rose-600">نسبة التأخير</p>
+                                    <p className="text-2xl font-bold text-rose-900">{advancedStats.lateRatePercent}%</p>
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+                )}
 
                 {/* Date Range Tabs & Controls */}
                 <Card className="p-4">
@@ -419,6 +611,7 @@ const HRDailyAttendance = () => {
                                         <TableHead className="text-center">الحضور</TableHead>
                                         <TableHead className="text-center">الانصراف</TableHead>
                                         <TableHead className="text-center">الساعات</TableHead>
+                                        <TableHead className="text-center">الخصم</TableHead>
                                         <TableHead className="text-center">الحالة</TableHead>
                                         <TableHead className="text-center w-[80px]">إجراءات</TableHead>
                                     </TableRow>
@@ -469,6 +662,11 @@ const HRDailyAttendance = () => {
                                             <TableCell className="text-center">
                                                 <span className="font-medium">
                                                     {record.worked_hours ? `${record.worked_hours.toFixed(1)} س` : '-'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <span className={record.deduction_amount && record.deduction_amount > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}>
+                                                    {record.deduction_amount && record.deduction_amount > 0 ? `${record.deduction_amount} ج.م` : '-'}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-center">
@@ -611,23 +809,50 @@ const HRDailyAttendance = () => {
                                     </div>
                                 </div>
 
-                                <div className="border-t pt-4">
-                                    <h4 className="font-medium mb-3">ملخص الحضور للشهر الحالي</h4>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div className="text-center p-3 bg-green-50 rounded-lg">
-                                            <p className="text-2xl font-bold text-green-600">-</p>
-                                            <p className="text-xs text-gray-500">أيام الحضور</p>
+                                {employeeMonthlySummary && (
+                                    <div className="border-t pt-4">
+                                        <h4 className="font-medium mb-3">ملخص الحضور {employeeMonthlySummary.month ? `لشهر ${new Date(employeeMonthlySummary.month + '-01').toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' })}` : 'للشهر الحالي'}</h4>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                                                <p className="text-2xl font-bold text-green-600">{employeeMonthlySummary.presentDays}</p>
+                                                <p className="text-xs text-gray-500">حاضر</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                                                <p className="text-2xl font-bold text-yellow-600">{employeeMonthlySummary.lateDays}</p>
+                                                <p className="text-xs text-gray-500">متأخر</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+                                                <p className="text-2xl font-bold text-red-600">{employeeMonthlySummary.absentDays}</p>
+                                                <p className="text-xs text-gray-500">غائب</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                <p className="text-2xl font-bold text-blue-600">{employeeMonthlySummary.leaveDays}</p>
+                                                <p className="text-xs text-gray-500">إجازة</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                                <p className="text-2xl font-bold text-purple-600">{employeeMonthlySummary.permissionDays}</p>
+                                                <p className="text-xs text-gray-500">إذن/مأمورية</p>
+                                            </div>
+                                            <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+                                                <p className="text-2xl font-bold text-orange-600">{employeeMonthlySummary.totalLateMinutes}</p>
+                                                <p className="text-xs text-gray-500">دقائق تأخير</p>
+                                            </div>
                                         </div>
-                                        <div className="text-center p-3 bg-red-50 rounded-lg">
-                                            <p className="text-2xl font-bold text-red-600">-</p>
-                                            <p className="text-xs text-gray-500">أيام الغياب</p>
-                                        </div>
-                                        <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                                            <p className="text-2xl font-bold text-yellow-600">-</p>
-                                            <p className="text-xs text-gray-500">دقائق التأخير</p>
-                                        </div>
+
+                                        {employeeMonthlySummary.totalRecords > 0 && (
+                                            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                                <div className="p-2 bg-gray-50 rounded">
+                                                    <p className="text-gray-500">ساعات العمل</p>
+                                                    <p className="font-bold text-gray-700">{employeeMonthlySummary.totalWorkedHours} س</p>
+                                                </div>
+                                                <div className="p-2 bg-gray-50 rounded">
+                                                    <p className="text-gray-500">إجمالي السجلات</p>
+                                                    <p className="font-bold text-gray-700">{employeeMonthlySummary.totalRecords} يوم</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )}
                     </DialogContent>

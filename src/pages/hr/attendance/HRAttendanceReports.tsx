@@ -2,19 +2,20 @@
  * صفحة تقارير الحضور المحسنة - نظام الموارد البشرية
  * Enhanced Attendance Reports - HR System
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-    BarChart3, Download, Calendar, Users, Clock, AlertTriangle,
-    Loader2, TrendingUp, TrendingDown, FileSpreadsheet, Printer
+    BarChart3, Calendar, Users, Clock, AlertTriangle,
+    Loader2, TrendingUp, TrendingDown, FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { AttendancePrintReport } from '@/components/hr/AttendancePrintReport';
+import { AnalyticsService } from '@/services/analyticsService';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface AttendanceStats {
     totalWorkDays: number;
@@ -35,6 +36,7 @@ interface TopEmployee {
 }
 
 const HRAttendanceReports = () => {
+    const schoolId = useSystemSchoolId();
     const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [loading, setLoading] = useState(true);
@@ -49,16 +51,31 @@ const HRAttendanceReports = () => {
     const [topLateEmployees, setTopLateEmployees] = useState<TopEmployee[]>([]);
     const [topAbsentEmployees, setTopAbsentEmployees] = useState<TopEmployee[]>([]);
     const [records, setRecords] = useState<any[]>([]);
-    const [showPrintPreview, setShowPrintPreview] = useState(false);
-    const printRef = useRef<HTMLDivElement>(null);
+
+    // School Settings State
+    const [schoolInfo, setSchoolInfo] = useState<any>(null);
 
     useEffect(() => {
-        fetchReportData();
-    }, [reportType, selectedMonth]);
+        fetchSchoolSettings();
+    }, []);
+
+    const fetchSchoolSettings = async () => {
+        try {
+            const info = await AnalyticsService.getSchoolInfo(schoolId);
+            setSchoolInfo(info);
+        } catch (err) {
+            console.error('Error fetching school settings:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (schoolId) fetchReportData();
+    }, [reportType, selectedMonth, schoolId]);
 
     const fetchReportData = async () => {
         try {
             setLoading(true);
+            if (!schoolId) return;
 
             // Calculate date range
             let startDate: string;
@@ -81,6 +98,7 @@ const HRAttendanceReports = () => {
           *,
           employee:employees(id, employee_id, full_name, department, position)
         `)
+                .eq('school_id', schoolId)
                 .gte('date', startDate)
                 .lte('date', endDate);
 
@@ -184,28 +202,6 @@ const HRAttendanceReports = () => {
         toast.success('تم تصدير التقرير بنجاح');
     };
 
-    const handlePrint = () => {
-        window.print();
-    };
-
-    const dateRange = {
-        startDate: `${selectedMonth}-01`,
-        endDate: new Date(
-            parseInt(selectedMonth.split('-')[0]),
-            parseInt(selectedMonth.split('-')[1]),
-            0
-        ).toISOString().split('T')[0],
-    };
-
-    const printStats = {
-        total: records.length,
-        present: records.filter(r => r.status === 'حاضر').length,
-        late: records.filter(r => r.status === 'متأخر').length,
-        absent: records.filter(r => r.status === 'غائب').length,
-        onLeave: records.filter(r => r.status === 'إجازة').length,
-        onPermission: records.filter(r => r.status === 'إذن' || r.status === 'مأمورية').length,
-    };
-
     return (
         <DashboardLayout>
             <div className="space-y-6">
@@ -244,10 +240,6 @@ const HRAttendanceReports = () => {
 
                         <div className="flex-1" />
 
-                        <Button variant="outline" onClick={handlePrint}>
-                            <Printer className="h-4 w-4 ml-2" />
-                            طباعة
-                        </Button>
                         <Button onClick={handleExportExcel}>
                             <FileSpreadsheet className="h-4 w-4 ml-2" />
                             تصدير Excel
@@ -418,34 +410,7 @@ const HRAttendanceReports = () => {
                         </div>
                     </>
                 )}
-
-                {/* Hidden Print Content */}
-                <div className="hidden print:block">
-                    <AttendancePrintReport
-                        ref={printRef}
-                        records={records}
-                        dateRange={dateRange}
-                        reportType={reportType === 'yearly' ? 'monthly' : reportType}
-                        stats={printStats}
-                    />
-                </div>
             </div>
-
-            {/* Print Styles */}
-            <style>{`
-        @media print {
-          body > * {
-            visibility: hidden;
-          }
-          .print\\:block {
-            display: block !important;
-            visibility: visible;
-            position: absolute;
-            left: 0;
-            top: 0;
-          }
-        }
-      `}</style>
         </DashboardLayout>
     );
 };

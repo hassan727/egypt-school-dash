@@ -165,53 +165,53 @@ export interface Subject {
 // السنة الدراسية
 export interface AcademicYear {
     id: string;
-    yearCode: string; // مثال: 2025-2026
-    yearNameAr: string;
-    startDate: string;
-    endDate: string;
-    isActive: boolean;
+    year_code: string; // مثال: 2025-2026
+    year_name_ar: string;
+    start_date: string;
+    end_date: string;
+    is_active: boolean;
     description?: string;
-    createdAt?: string;
-    updatedAt?: string;
+    created_at?: string;
+    updated_at?: string;
 }
 
 // الفصل الدراسي
 export interface Semester {
     id: string;
-    academicYearId: string;
-    semesterCode: string; // TERM_1, TERM_2
-    semesterNameAr: string;
-    orderNumber: number; // 1 أو 2
-    startDate: string;
-    endDate: string;
-    isActive: boolean;
-    createdAt?: string;
-    updatedAt?: string;
+    academic_year_id: string;
+    semester_code: string; // TERM_1, TERM_2
+    semester_name_ar: string;
+    order_number: number; // 1 أو 2
+    start_date: string;
+    end_date: string;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 // المادة الدراسية (محدثة)
 export interface SubjectHierarchy {
     id: string;
-    subjectCode: string; // كود موحد (ARABIC, MATH, SCIENCE, ENGLISH, ISLAMIC, ART, PE)
-    subjectNameAr: string;
-    subjectNameEn?: string;
-    stageLevel?: string; // الصف - null إذا كانت للجميع
-    isActive: boolean;
-    createdAt?: string;
-    updatedAt?: string;
+    subject_code: string; // كود موحد (ARABIC, MATH, SCIENCE, ENGLISH, ISLAMIC, ART, PE)
+    subject_name_ar: string;
+    subject_name_en?: string;
+    stage_level?: string; // الصف - null إذا كانت للجميع
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 // نوع التقييم (محدث)
 export interface AssessmentTypeHierarchy {
     id: string;
-    assessmentCode: string; // DAILY, WEEKLY, MONTHLY, MID_YEAR, FINAL, PROJECT, PRESENTATION
-    assessmentNameAr: string;
-    assessmentNameEn?: string;
+    assessment_code: string; // DAILY, WEEKLY, MONTHLY, MID_YEAR, FINAL, PROJECT, PRESENTATION
+    assessment_name_ar: string;
+    assessment_name_en?: string;
     description?: string;
     weight: number; // الوزن الافتراضي
-    isActive: boolean;
-    createdAt?: string;
-    updatedAt?: string;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
 }
 
 // أنواع التقييمات (للحفاظ على التوافق)

@@ -15,6 +15,7 @@ import { ImportStudentsModal } from '@/components/students/ImportStudentsModal';
 import * as XLSX from 'xlsx';
 import { StudentService } from '@/services/studentService';
 import { useGlobalFilter } from '@/context/GlobalFilterContext';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { MessageModal } from '@/components/notifications/MessageModal';
 
 interface Student {
@@ -61,6 +62,8 @@ const StudentsList = () => {
     stagesClasses
   } = useGlobalFilter();
 
+  const schoolId = useSystemSchoolId();
+
   // Derived Filter Options
   const uniqueStages = useMemo(() => {
     const stages = new Set(stagesClasses.map(item => item.stage_name));
@@ -98,6 +101,10 @@ const StudentsList = () => {
         `);
 
       // Apply Filters
+      if (schoolId) {
+        query = query.eq('school_id', schoolId);
+      }
+
       if (selectedYear && selectedYear !== 'all') {
         query = query.eq('academic_year', selectedYear);
       }
@@ -138,7 +145,8 @@ const StudentsList = () => {
       // Get accurate total count of ALL students in DB for user awareness
       const { count: totalDbCount } = await supabase
         .from('students')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('school_id', schoolId);
 
       setTotalStudentsCount(totalDbCount || 0);
 
@@ -146,6 +154,7 @@ const StudentsList = () => {
       const { count: missingYearCount } = await supabase
         .from('students')
         .select('*', { count: 'exact', head: true })
+        .eq('school_id', schoolId) // Ensure we only count for current school
         .is('academic_year', null);
 
       setMissingYearCount(missingYearCount || 0);
@@ -273,12 +282,12 @@ const StudentsList = () => {
     try {
       setIsDeleting(true);
 
-      const { error } = await supabase
-        .from('students')
-        .delete()
-        .in('id', Array.from(selectedStudentIds));
+      if (!schoolId) {
+        toast.error('لم يتم تحديد المدرسة');
+        return;
+      }
 
-      if (error) throw error;
+      await StudentService.bulkDeleteStudents(schoolId, Array.from(selectedStudentIds));
 
       toast.success(`تم حذف ${selectedStudentIds.size} طالب بنجاح`);
       setSelectedStudentIds(new Set());
@@ -430,6 +439,7 @@ const StudentsList = () => {
                       const { error } = await supabase
                         .from('students')
                         .update({ academic_year: '2025-2026' })
+                        .eq('school_id', schoolId)
                         .is('academic_year', null);
 
                       if (error) throw error;
@@ -530,9 +540,16 @@ const StudentsList = () => {
                               className="text-red-600 hover:text-red-700 hover:bg-red-50"
                               onClick={async (e) => {
                                 e.stopPropagation();
+                                if (!schoolId) return;
                                 if (window.confirm('هل أنت متأكد من الحذف؟')) {
-                                  await StudentService.deleteStudent(student.student_id);
-                                  fetchStudents();
+                                  try {
+                                    await StudentService.deleteStudent(schoolId, student.student_id);
+                                    toast.success('تم حذف الطالب بنجاح');
+                                    fetchStudents();
+                                  } catch (error) {
+                                    console.error('Error deleting student:', error);
+                                    toast.error('حدث خطأ أثناء حذف الطالب');
+                                  }
                                 }
                               }}
                             >

@@ -17,8 +17,10 @@ import {
     CreateTransactionDTO,
     EmployeeLoan,
 } from '@/types/finance';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 export function useFinanceData(academicYear?: string) {
+    const schoolId = useSystemSchoolId();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -35,11 +37,14 @@ export function useFinanceData(academicYear?: string) {
     // جلب الملخص المالي
     const fetchSummary = useCallback(async () => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
+
             // 1. جلب الدفعات المقدمة من school_fees
             const { data: feesData } = await supabase
                 .from('school_fees')
                 .select('student_id, total_amount, advance_payment')
-                .eq('academic_year_code', currentYear);
+                .eq('academic_year_code', currentYear)
+                .eq('school_id', schoolId); // Enforce School Identity
 
             const totalFeesExpected = feesData?.reduce((sum, f) => sum + (f.total_amount || 0), 0) || 0;
             const totalAdvancePayments = feesData?.reduce((sum, f) => sum + (f.advance_payment || 0), 0) || 0;
@@ -49,7 +54,8 @@ export function useFinanceData(academicYear?: string) {
                 .from('financial_transactions')
                 .select('amount, student_id')
                 .eq('academic_year_code', currentYear)
-                .eq('transaction_type', 'دفعة');
+                .eq('transaction_type', 'دفعة')
+                .eq('school_id', schoolId); // Enforce School Identity
 
             const totalStudentPayments = studentPayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
 
@@ -58,7 +64,8 @@ export function useFinanceData(academicYear?: string) {
                 .from('financial_transactions')
                 .select('amount')
                 .eq('academic_year_code', currentYear)
-                .eq('transaction_type', 'خصم');
+                .eq('transaction_type', 'خصم')
+                .eq('school_id', schoolId); // Enforce School Identity
 
             const totalStudentDiscounts = discountsData?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
 
@@ -66,7 +73,8 @@ export function useFinanceData(academicYear?: string) {
             const { data: generalTx } = await supabase
                 .from('general_transactions')
                 .select('*')
-                .eq('academic_year_code', currentYear);
+                .eq('academic_year_code', currentYear)
+                .eq('school_id', schoolId); // Enforce School Identity
 
             const generalRevenue = generalTx
                 ?.filter(t => t.transaction_type === 'إيراد')
@@ -76,40 +84,33 @@ export function useFinanceData(academicYear?: string) {
                 ?.filter(t => t.transaction_type === 'مصروف')
                 .reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
 
-            // 5. جلب الرواتب
+            // 5. جلب الرواتب (مستحق)
             const { data: pendingSalariesData } = await supabase
                 .from('salaries')
                 .select('net_salary')
                 .eq('academic_year_code', currentYear)
-                .eq('status', 'مستحق');
+                .eq('status', 'مستحق')
+                .eq('school_id', schoolId); // Enforce School Identity
 
             const totalPendingSalaries = pendingSalariesData?.reduce((sum, s) => sum + (s.net_salary || 0), 0) || 0;
 
+            // 6. جلب الرواتب (تم الصرف)
             const { data: paidSalariesData } = await supabase
                 .from('salaries')
                 .select('net_salary')
                 .eq('academic_year_code', currentYear)
-                .eq('status', 'تم الصرف');
+                .eq('status', 'تم الصرف')
+                .eq('school_id', schoolId); // Enforce School Identity
 
             const totalPaidSalaries = paidSalariesData?.reduce((sum, s) => sum + (s.net_salary || 0), 0) || 0;
 
-            // ===== الحسابات الصحيحة =====
-
-            // إجمالي الإيرادات = إيرادات عامة + مدفوعات الطلاب + الدفعات المقدمة
+            // ===== الحسابات الصحيحة (كما هي) =====
             const totalRevenue = generalRevenue + totalStudentPayments + totalAdvancePayments;
-
-            // إجمالي المصروفات = مصروفات عامة + رواتب مدفوعة
             const totalExpenses = generalExpenses + totalPaidSalaries;
-
-            // تحصيل الطلاب = مدفوعات + مقدمات
             const studentCollection = totalStudentPayments + totalAdvancePayments;
+            const collectionRate = totalFeesExpected > 0 ? (studentCollection / totalFeesExpected) * 100 : 0;
 
-            // نسبة التحصيل = (المدفوع + المقدمات) / الرسوم المطلوبة
-            const collectionRate = totalFeesExpected > 0
-                ? (studentCollection / totalFeesExpected) * 100
-                : 0;
-
-            // حساب الطلاب المتأخرين (من دفع أقل من 50% مع احتساب المقدمات والخصومات)
+            // حساب الطلاب المتأخرين
             let overdueCount = 0;
             feesData?.forEach(student => {
                 const studentPaid = studentPayments
@@ -128,7 +129,7 @@ export function useFinanceData(academicYear?: string) {
                 totalRevenue,
                 totalExpenses,
                 netBalance: totalRevenue - totalExpenses,
-                studentPayments: studentCollection, // مدفوعات + مقدمات
+                studentPayments: studentCollection,
                 totalSalaries: totalPaidSalaries + totalPendingSalaries,
                 pendingSalaries: totalPendingSalaries,
                 collectionRate: Math.round(collectionRate),
@@ -140,7 +141,7 @@ export function useFinanceData(academicYear?: string) {
         } catch (err) {
             console.error('خطأ في جلب الملخص المالي:', err);
         }
-    }, [currentYear]);
+    }, [currentYear, schoolId]); // Added schoolId dependency
 
     // Data states for detail views/alerts
     const [rawSchoolFees, setRawSchoolFees] = useState<any[]>([]);
@@ -149,27 +150,25 @@ export function useFinanceData(academicYear?: string) {
     // Fetch detailed fees and installments
     const fetchDetailedFees = useCallback(async () => {
         try {
+            if (!schoolId) return;
+
             // Fetch school_fees
             const { data: fees } = await supabase
                 .from('school_fees')
                 .select('*')
-                .eq('academic_year_code', currentYear);
+                .eq('academic_year_code', currentYear)
+                .eq('school_id', schoolId); // Enforce School Identity
 
             if (fees) setRawSchoolFees(fees);
 
             // Fetch installments linked to these fees or year
-            // Assuming fee_installments is correct table name based on context
-            const { data: insts } = await supabase
-                .from('fee_installments')
-                .select('*')
-            // If fee_installments doesn't have academic_year directly, we filter by fee_id match in JS or join
-            // checking usage suggests it might be linked to school_fees
-            // We'll fetch all checks for now or join if possible. 
-            // Using nested select might be better but let's separate for now.
 
             // To be safe and optimal, let's fetch installments where fee_id is in the fees list
             if (fees && fees.length > 0) {
                 const feeIds = fees.map(f => f.id);
+                // Tip: Supabase IN has a limit, but usually fine for <1000 items. 
+                // Better approach would be filtering by school_id if fee_installments has it, or join.
+                // Assuming fee_installments is strictly child of school_fees:
                 const { data: installmentsData } = await supabase
                     .from('fee_installments')
                     .select('*')
@@ -183,15 +182,18 @@ export function useFinanceData(academicYear?: string) {
         } catch (err) {
             console.error('Error fetching detailed fees:', err);
         }
-    }, [currentYear]);
+    }, [currentYear, schoolId]);
 
 
     // جلب الموظفين
     const fetchEmployees = useCallback(async () => {
         try {
+            if (!schoolId) return;
+
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
+                .eq('school_id', schoolId) // Enforce School Identity
                 .order('full_name');
 
             if (error) throw error;
@@ -220,11 +222,13 @@ export function useFinanceData(academicYear?: string) {
         } catch (err) {
             console.error('خطأ في جلب الموظفين:', err);
         }
-    }, []);
+    }, [schoolId]);
 
     // جلب الرواتب
     const fetchSalaries = useCallback(async (month?: string) => {
         try {
+            if (!schoolId) return;
+
             let query = supabase
                 .from('salaries')
                 .select(`
@@ -239,6 +243,7 @@ export function useFinanceData(academicYear?: string) {
                     salary_items (*)
                 `)
                 .eq('academic_year_code', currentYear)
+                .eq('school_id', schoolId) // Enforce School Identity
                 .order('month', { ascending: false });
 
             if (month) {
@@ -284,15 +289,18 @@ export function useFinanceData(academicYear?: string) {
         } catch (err) {
             console.error('خطأ في جلب الرواتب:', err);
         }
-    }, [currentYear]);
+    }, [currentYear, schoolId]);
 
     // جلب الحركات المالية
     const fetchTransactions = useCallback(async () => {
         try {
+            if (!schoolId) return;
+
             const { data, error } = await supabase
                 .from('general_transactions')
                 .select('*')
                 .eq('academic_year_code', currentYear)
+                .eq('school_id', schoolId) // Enforce School Identity
                 .order('transaction_date', { ascending: false })
                 .limit(100);
 
@@ -319,7 +327,7 @@ export function useFinanceData(academicYear?: string) {
         } catch (err) {
             console.error('خطأ في جلب الحركات المالية:', err);
         }
-    }, [currentYear]);
+    }, [currentYear, schoolId]);
 
     // جلب تصنيفات الإيرادات والمصروفات
     const fetchCategories = useCallback(async () => {
@@ -454,6 +462,8 @@ export function useFinanceData(academicYear?: string) {
     // إضافة موظف جديد
     const addEmployee = async (data: CreateEmployeeDTO): Promise<Employee | null> => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
+
             const employeeId = `EMP${Date.now().toString().slice(-6)}`;
 
             const { data: newEmployee, error } = await supabase
@@ -468,8 +478,9 @@ export function useFinanceData(academicYear?: string) {
                     phone: data.phone,
                     email: data.email,
                     hire_date: data.hireDate,
-                    contract_type: data.contractType || 'دائم',
+                    contractType: data.contractType || 'دائم',
                     base_salary: data.baseSalary,
+                    school_id: schoolId, // Enforce School Identity
                     is_active: true,
                 })
                 .select()
@@ -488,6 +499,8 @@ export function useFinanceData(academicYear?: string) {
     // إضافة حركة مالية عامة
     const addTransaction = async (data: CreateTransactionDTO): Promise<GeneralTransaction | null> => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
+
             const { data: newTx, error } = await supabase
                 .from('general_transactions')
                 .insert({
@@ -502,6 +515,7 @@ export function useFinanceData(academicYear?: string) {
                     payment_method: data.paymentMethod,
                     receipt_number: data.receiptNumber,
                     notes: data.notes,
+                    school_id: schoolId, // Enforce School Identity
                     created_by: 'current_user',
                 })
                 .select()
@@ -520,6 +534,8 @@ export function useFinanceData(academicYear?: string) {
     // صرف راتب
     const paySalary = async (salaryId: string, paymentDate: string, paymentMethod: string): Promise<boolean> => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً');
+
             const salary = salaries.find(s => s.id === salaryId);
             if (!salary) throw new Error('الراتب غير موجود');
 
@@ -531,7 +547,8 @@ export function useFinanceData(academicYear?: string) {
                     payment_date: paymentDate,
                     payment_method: paymentMethod,
                 })
-                .eq('id', salaryId);
+                .eq('id', salaryId)
+                .eq('school_id', schoolId); // Enforce School Identity
 
             if (updateError) throw updateError;
 
@@ -548,6 +565,7 @@ export function useFinanceData(academicYear?: string) {
                     reference_type: 'salary',
                     reference_id: salaryId,
                     payment_method: paymentMethod,
+                    school_id: schoolId, // Enforce School Identity
                     created_by: 'current_user',
                 });
 
@@ -564,6 +582,8 @@ export function useFinanceData(academicYear?: string) {
     // إنشاء رواتب الشهر
     const generateMonthlySalaries = async (month: string): Promise<number> => {
         try {
+            if (!schoolId) throw new Error('يرجى اختيار المدرسة أولاً'); // Enforce Fail Fast
+
             const activeEmployees = employees.filter(e => e.isActive);
             let created = 0;
 
@@ -571,6 +591,7 @@ export function useFinanceData(academicYear?: string) {
             const { data: settingsData } = await supabase
                 .from('hr_system_settings')
                 .select('*')
+                .eq('school_id', schoolId) // Enforce School Identity (assuming table has school_id)
                 .maybeSingle();
 
             // Default 'Smart' Rules
@@ -598,6 +619,7 @@ export function useFinanceData(academicYear?: string) {
             const { data: overridesData } = await supabase
                 .from('hr_calendar_overrides')
                 .select('*')
+                .eq('school_id', schoolId) // Enforce School Identity
                 .gte('date', startDate)
                 .lte('date', endDate);
 
@@ -607,11 +629,14 @@ export function useFinanceData(academicYear?: string) {
             const { data: attendanceData, error: attendanceError } = await supabase
                 .from('employee_attendance')
                 .select('*')
+                .eq('school_id', schoolId) // Enforce School Identity
                 .gte('date', startDate)
                 .lte('date', endDate);
 
             if (attendanceError) throw attendanceError;
             const allAttendance = attendanceData as any[];
+
+
 
             // 3. Process Each Employee
             for (const emp of activeEmployees) {
@@ -672,7 +697,9 @@ export function useFinanceData(academicYear?: string) {
                     const isPresent = attRecord && (attRecord.status === 'حاضر' || attRecord.status === 'متأخر' || attRecord.status === 'مأمورية');
                     const isAbsent = !isPresent && !isOff;
 
-                    // 3. Apply Rules
+
+
+                    // 4. Apply Rules
 
                     // A. Fixed Bonus
                     if (bonus > 0) {
@@ -751,6 +778,7 @@ export function useFinanceData(academicYear?: string) {
                     salaryItemsToInsert.push({ item_type: 'بدل', item_name: 'عمل إضافي', amount: parseFloat(accOvertimePay.toFixed(2)), notes: 'ساعات إضافية' });
                 }
 
+
                 // Final Net Salary
                 const netSalary = Math.max(0, emp.baseSalary + totalAllowances - totalDeductions);
 
@@ -765,6 +793,7 @@ export function useFinanceData(academicYear?: string) {
                         total_allowances: parseFloat(totalAllowances.toFixed(2)),
                         total_deductions: parseFloat(totalDeductions.toFixed(2)),
                         net_salary: parseFloat(netSalary.toFixed(2)),
+                        school_id: schoolId,
                         status: 'مستحق'
                     })
                     .select()

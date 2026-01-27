@@ -19,12 +19,15 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { processExcelData, ImportReferenceData, ImportContext, generateSmartTemplate, convertRawDataToJSON } from '@/utils/excelImport';
 import { useGlobalFilter } from '@/context/GlobalFilterContext';
+import { useSystemSchoolId } from '@/context/SystemContext';
+import { StudentService } from '@/services/studentService';
 
 interface ImportStudentsModalProps {
     onSuccess: () => void;
 }
 
 export function ImportStudentsModal({ onSuccess }: ImportStudentsModalProps) {
+    const schoolId = useSystemSchoolId();
     const [open, setOpen] = useState(false);
     const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
     const [file, setFile] = useState<File | null>(null);
@@ -60,10 +63,11 @@ export function ImportStudentsModal({ onSuccess }: ImportStudentsModalProps) {
     }, [open]);
 
     const fetchReferenceData = async () => {
+        if (!schoolId) return;
         setLoadingRefs(true);
         try {
-            const { data: stages } = await supabase.from('stages').select('id, name');
-            const { data: classes } = await supabase.from('classes').select('id, name, stage_id');
+            const { data: stages } = await supabase.from('stages').select('id, name').eq('school_id', schoolId);
+            const { data: classes } = await supabase.from('classes').select('id, name, stage_id').eq('school_id', schoolId);
             setRefData({
                 stages: stages || [],
                 classes: classes || []
@@ -217,9 +221,12 @@ export function ImportStudentsModal({ onSuccess }: ImportStudentsModalProps) {
                 registration_status: 'provisionally_registered'
             }));
 
-            const { error } = await supabase.from('students').insert(studentsToInsert);
+            if (!schoolId) {
+                toast.error('لم يتم تحديد المدرسة');
+                return;
+            }
 
-            if (error) throw error;
+            await StudentService.importStudentsData(schoolId, studentsToInsert);
 
             toast.success(`تم استيراد ${studentsToInsert.length} طالب بنجاح`);
             setOpen(false);

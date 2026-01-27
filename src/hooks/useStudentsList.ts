@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface Student {
     student_id: string;
@@ -13,12 +14,19 @@ interface Student {
 }
 
 export function useStudentsList(limit: number = 1000) {
+    const schoolId = useSystemSchoolId();
     const [students, setStudents] = useState<Student[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchStudents = async () => {
+            if (!schoolId) {
+                setStudents([]);
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
                 setError(null);
@@ -26,6 +34,7 @@ export function useStudentsList(limit: number = 1000) {
                 const { data, error: fetchError } = await supabase
                     .from('students')
                     .select('*')
+                    .eq('school_id', schoolId)
                     .limit(limit);
 
                 if (fetchError) throw fetchError;
@@ -40,7 +49,7 @@ export function useStudentsList(limit: number = 1000) {
         };
 
         fetchStudents();
-    }, [limit]);
+    }, [limit, schoolId]);
 
     return { students, loading, error };
 }

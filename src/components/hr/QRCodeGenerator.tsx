@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface QRLocation {
     id: string;
@@ -34,6 +35,7 @@ interface QRCodeData {
 }
 
 export function QRCodeGenerator() {
+    const schoolId = useSystemSchoolId();
     const [locations, setLocations] = useState<QRLocation[]>([]);
     const [qrCodes, setQRCodes] = useState<QRCodeData[]>([]);
     const [loading, setLoading] = useState(true);
@@ -88,8 +90,14 @@ export function QRCodeGenerator() {
     };
 
     const handleAddLocation = async () => {
+        if (!schoolId) {
+            toast.error('لم يتم تحديد ID المدرسة. يرجى تسجيل الدخول مرة أخرى.');
+            return;
+        }
+
         try {
             const { error } = await supabase.from('attendance_locations').insert({
+                school_id: schoolId,
                 location_name: newLocation.location_name,
                 latitude: parseFloat(newLocation.latitude),
                 longitude: parseFloat(newLocation.longitude),
@@ -119,6 +127,7 @@ export function QRCodeGenerator() {
                 qr_code_data: qrCodeData,
                 qr_type: newQR.qr_type,
                 is_active: true,
+                school_id: schoolId,
             });
 
             if (error) throw error;
@@ -265,8 +274,8 @@ export function QRCodeGenerator() {
                                     {qr.location?.location_name}
                                 </span>
                                 <span className={`text-xs px-2 py-1 rounded ${qr.qr_type === 'check_in'
-                                        ? 'bg-green-100 text-green-700'
-                                        : 'bg-blue-100 text-blue-700'
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-blue-100 text-blue-700'
                                     }`}>
                                     {qr.qr_type === 'check_in' ? 'حضور' : 'انصراف'}
                                 </span>

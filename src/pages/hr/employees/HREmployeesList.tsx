@@ -59,8 +59,10 @@ import { supabase } from '@/lib/supabase';
 import { HREmployee, EmployeeType, EmployeeStatus } from '@/types/hr';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 const HREmployeesList = () => {
+    const schoolId = useSystemSchoolId();
     const [employees, setEmployees] = useState<HREmployee[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -72,15 +74,17 @@ const HREmployeesList = () => {
     const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
-        fetchEmployees();
-    }, []);
+        if (schoolId) fetchEmployees();
+    }, [schoolId]);
 
     const fetchEmployees = async () => {
         try {
+            if (!schoolId) return;
             setLoading(true);
             const { data, error } = await supabase
                 .from('employees')
                 .select('*')
+                .eq('school_id', schoolId)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;

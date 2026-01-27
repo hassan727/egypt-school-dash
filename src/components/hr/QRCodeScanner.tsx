@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { attendanceService } from '@/services/attendanceService';
 
 interface QRScannerProps {
     employeeId: string;
@@ -162,78 +163,155 @@ export function QRCodeScanner({ employeeId, onCheckInSuccess }: QRScannerProps) 
                 throw new Error('رمز QR غير صالح أو غير موجود');
             }
 
-            // Try to get fresh location (optional)
-            let currentLocation = location;
+            // 🔒 STRICT LOCATION VERIFICATION - Required for security
+            let currentLocation: GeolocationData;
             let locationVerified = false;
+            let distanceFromLocation = 0;
 
+            // Step 1: GPS is MANDATORY - cannot proceed without it
             try {
                 currentLocation = await getCurrentLocation();
-
-                // Verify location is within allowed radius (if location available)
-                if (currentLocation && qrCode.location) {
-                    const distance = calculateDistance(
-                        currentLocation.latitude,
-                        currentLocation.longitude,
-                        qrCode.location.latitude,
-                        qrCode.location.longitude
-                    );
-
-                    if (distance > qrCode.location.radius_meters) {
-                        // Show warning but don't block - for flexibility
-                        console.warn(`Distance exceeds limit: ${distance}m vs ${qrCode.location.radius_meters}m`);
-                        toast.warning(`تنبيه: المسافة ${Math.round(distance)} متر (المسموح: ${qrCode.location.radius_meters} متر)`);
-                    } else {
-                        locationVerified = true;
-                    }
-                }
-            } catch (locErr) {
-                // Location not available - continue without verification
-                console.warn('Could not verify location:', locErr);
+            } catch (locErr: any) {
+                throw new Error('⚠️ يجب تفعيل خدمة الموقع (GPS) لتسجيل الحضور. يرجى تفعيل الموقع والمحاولة مرة أخرى.');
             }
 
-            // Record attendance
+            // Step 2: Verify location is within allowed radius - STRICT enforcement
+            if (qrCode.location) {
+                distanceFromLocation = calculateDistance(
+                    currentLocation.latitude,
+                    currentLocation.longitude,
+                    qrCode.location.latitude,
+                    qrCode.location.longitude
+                );
+
+                if (distanceFromLocation > qrCode.location.radius_meters) {
+                    // 🚫 BLOCK - Employee is outside allowed zone
+                    throw new Error(
+                        `❌ أنت خارج نطاق الموقع المسموح!\n` +
+                        `📍 المسافة الحالية: ${Math.round(distanceFromLocation)} متر\n` +
+                        `✅ المسافة المسموحة: ${qrCode.location.radius_meters} متر\n` +
+                        `يجب أن تكون داخل نطاق "${qrCode.location.location_name}" لتسجيل الحضور.`
+                    );
+                }
+
+                locationVerified = true;
+                toast.success(`✅ تم التحقق من الموقع (${Math.round(distanceFromLocation)} متر من ${qrCode.location.location_name})`);
+            } else {
+                // No location linked to QR - still allow but flag as unverified
+                console.warn('QR code has no linked location - allowing unverified check-in');
+            }
+
+            // Get current date and time for validation
             const now = new Date();
             const today = now.toISOString().split('T')[0];
             const currentTime = now.toTimeString().split(' ')[0];
 
-            if (qrCode.qr_type === 'check_in') {
-                // Check-in
-                const { data, error: insertError } = await supabase
-                    .from('employee_attendance')
-                    .upsert({
-                        employee_id: employeeId,
-                        date: today,
-                        check_in_time: currentTime,
-                        check_in_latitude: currentLocation?.latitude || null,
-                        check_in_longitude: currentLocation?.longitude || null,
-                        check_in_verified: locationVerified,
-                        status: 'حاضر', // Will be recalculated by trigger/function
-                    }, { onConflict: 'employee_id,date' })
-                    .select()
-                    .single();
+            // 🔍 SMART VALIDATION - Fetch today's attendance record
+            const { data: todayRecord } = await supabase
+                .from('employee_attendance')
+                .select('id, check_in_time, check_out_time')
+                .eq('employee_id', employeeId)
+                .eq('date', today)
+                .maybeSingle();
 
-                if (insertError) throw insertError;
+            // 🔍 SMART VALIDATION - Fetch time restrictions from settings
+            const { data: settingsData } = await supabase
+                .from('attendance_settings')
+                .select('setting_key, setting_value')
+                .in('setting_key', [
+                    'check_in_start_time',
+                    'check_in_end_time',
+                    'check_out_start_time',
+                    'check_out_end_time',
+                    'enforce_time_restrictions'
+                ]);
+
+            const settings: Record<string, string> = {};
+            settingsData?.forEach(s => { settings[s.setting_key] = s.setting_value; });
+
+            const enforceTime = settings['enforce_time_restrictions'] === 'true';
+            const currentHourMin = currentTime.substring(0, 5); // "HH:MM"
+
+            if (qrCode.qr_type === 'check_in') {
+                // ⚠️ Check if already checked in today
+                if (todayRecord?.check_in_time) {
+                    const confirmed = confirm(
+                        `⚠️ أنت سجلت حضور اليوم الساعة ${todayRecord.check_in_time.substring(0, 5)}\n\n` +
+                        `هل تريد تحديث وقت الحضور إلى ${currentHourMin}؟`
+                    );
+                    if (!confirmed) {
+                        throw new Error('تم إلغاء التسجيل');
+                    }
+                }
+
+                // ⏰ Time restriction for check-in
+                if (enforceTime && settings['check_in_start_time'] && settings['check_in_end_time']) {
+                    if (currentHourMin < settings['check_in_start_time'] || currentHourMin > settings['check_in_end_time']) {
+                        throw new Error(
+                            `❌ تسجيل الحضور متاح فقط من ${settings['check_in_start_time']} إلى ${settings['check_in_end_time']}\n` +
+                            `الوقت الحالي: ${currentHourMin}`
+                        );
+                    }
+                }
+
+                // Check-in
+                const data = await attendanceService.recordAttendance(
+                    employeeId,
+                    today,
+                    currentTime,
+                    undefined,
+                    {
+                        check_in_latitude: currentLocation.latitude,
+                        check_in_longitude: currentLocation.longitude,
+                        check_in_verified: locationVerified,
+                        distance_from_school_meters: Math.round(distanceFromLocation),
+                    }
+                );
 
                 setSuccess(`تم تسجيل الحضور بنجاح في ${currentTime.substring(0, 5)}`);
                 toast.success('تم تسجيل الحضور بنجاح!');
                 onCheckInSuccess?.(data);
 
             } else {
-                // Check-out
-                const { data, error: updateError } = await supabase
-                    .from('employee_attendance')
-                    .update({
-                        check_out_time: currentTime,
-                        check_out_latitude: currentLocation?.latitude || null,
-                        check_out_longitude: currentLocation?.longitude || null,
-                        check_out_verified: locationVerified,
-                    })
-                    .eq('employee_id', employeeId)
-                    .eq('date', today)
-                    .select()
-                    .single();
+                // 🚫 BLOCK check-out without check-in
+                if (!todayRecord?.check_in_time) {
+                    throw new Error('❌ لا يمكن تسجيل انصراف بدون تسجيل حضور أولاً!');
+                }
 
-                if (updateError) throw updateError;
+                // ⚠️ Check if already checked out today
+                if (todayRecord?.check_out_time) {
+                    const confirmed = confirm(
+                        `⚠️ أنت سجلت انصراف اليوم الساعة ${todayRecord.check_out_time.substring(0, 5)}\n\n` +
+                        `هل تريد تحديث وقت الانصراف إلى ${currentHourMin}؟`
+                    );
+                    if (!confirmed) {
+                        throw new Error('تم إلغاء التسجيل');
+                    }
+                }
+
+                // ⏰ Time restriction for check-out
+                if (enforceTime && settings['check_out_start_time'] && settings['check_out_end_time']) {
+                    if (currentHourMin < settings['check_out_start_time'] || currentHourMin > settings['check_out_end_time']) {
+                        throw new Error(
+                            `❌ تسجيل الانصراف متاح فقط من ${settings['check_out_start_time']} إلى ${settings['check_out_end_time']}\n` +
+                            `الوقت الحالي: ${currentHourMin}`
+                        );
+                    }
+                }
+
+                // Check-out
+                const data = await attendanceService.recordAttendance(
+                    employeeId,
+                    today,
+                    undefined,
+                    currentTime,
+                    {
+                        check_out_latitude: currentLocation.latitude,
+                        check_out_longitude: currentLocation.longitude,
+                        check_out_verified: locationVerified,
+                        distance_from_school_meters: Math.round(distanceFromLocation),
+                    }
+                );
 
                 setSuccess(`تم تسجيل الانصراف بنجاح في ${currentTime.substring(0, 5)}`);
                 toast.success('تم تسجيل الانصراف بنجاح!');

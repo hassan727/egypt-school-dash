@@ -13,6 +13,7 @@ import { calculateRefundAmount, createRefundFromCalculation, type RefundCalculat
 import { StudentService } from '@/services/studentService';
 import { getEgyptianDateString } from '@/utils/helpers';
 import type { SchoolFees, FinancialTransaction } from '@/types/student';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface RefundRequestModalProps {
     open: boolean;
@@ -38,6 +39,7 @@ export function RefundRequestModal({
     const [loading, setLoading] = useState(false);
     const [calculating, setCalculating] = useState(false);
     const [calculationResult, setCalculationResult] = useState<RefundCalculationResult | null>(null);
+    const schoolId = useSystemSchoolId();
 
     const [formData, setFormData] = useState({
         withdrawalDate: getEgyptianDateString(),
@@ -125,18 +127,23 @@ export function RefundRequestModal({
                 formData.notes
             );
 
-            const createdRefund = await StudentService.createRefundRequest(refundData);
+            if (!schoolId) {
+                toast.error('لم يتم تحديد المدرسة');
+                return;
+            }
+
+            const createdRefund = await StudentService.createRefundRequest(schoolId, refundData);
 
             if (createdRefund.id && calculationResult.deductions.length > 0) {
                 const deductionsWithRefundId = calculationResult.deductions.map(d => ({
                     ...d,
                     refundId: createdRefund.id
                 }));
-                await StudentService.addRefundDeductions(deductionsWithRefundId);
+                await StudentService.addRefundDeductions(schoolId, deductionsWithRefundId);
             }
 
             toast.success('تم إنشاء طلب الاسترداد بنجاح ✓');
-            
+
             if (onRefundCreated) {
                 onRefundCreated(createdRefund.id);
             }

@@ -16,6 +16,7 @@ import {
     DialogDescription
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface Class {
     id: string;
@@ -35,6 +36,7 @@ export default function StagesClasses() {
     const [loading, setLoading] = useState(true);
     const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
     const { toast } = useToast();
+    const schoolId = useSystemSchoolId();
 
     // Dialog States
     const [isAddStageOpen, setIsAddStageOpen] = useState(false);
@@ -48,26 +50,36 @@ export default function StagesClasses() {
     const [editingClass, setEditingClass] = useState<{ id: string, name: string } | null>(null);
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (schoolId) {
+            fetchData();
+        }
+    }, [schoolId]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
 
             // Fetch Stages
-            const { data: stagesData, error: stagesError } = await supabase
+            let stagesQuery = supabase
                 .from('stages')
                 .select('*')
                 .order('created_at', { ascending: true });
 
+            if (schoolId) stagesQuery = stagesQuery.eq('school_id', schoolId);
+
+            const { data: stagesData, error: stagesError } = await stagesQuery;
+
             if (stagesError) throw stagesError;
 
             // Fetch Classes
-            const { data: classesData, error: classesError } = await supabase
+            let classesQuery = supabase
                 .from('classes')
                 .select('*, students(count)') // Get student count if possible, or just count later
                 .order('name', { ascending: true });
+
+            if (schoolId) classesQuery = classesQuery.eq('school_id', schoolId);
+
+            const { data: classesData, error: classesError } = await classesQuery;
 
             if (classesError) throw classesError;
 
@@ -103,12 +115,12 @@ export default function StagesClasses() {
     // --- Stage Actions ---
 
     const handleAddStage = async () => {
-        if (!newStageName.trim()) return;
+        if (!newStageName.trim() || !schoolId) return;
 
         try {
             const { error } = await supabase
                 .from('stages')
-                .insert([{ name: newStageName }]);
+                .insert([{ name: newStageName, school_id: schoolId }]);
 
             if (error) throw error;
 
@@ -128,7 +140,8 @@ export default function StagesClasses() {
             const { error } = await supabase
                 .from('stages')
                 .update({ name: editingStage.name })
-                .eq('id', editingStage.id);
+                .eq('id', editingStage.id)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -147,7 +160,8 @@ export default function StagesClasses() {
             const { error } = await supabase
                 .from('stages')
                 .delete()
-                .eq('id', stageId);
+                .eq('id', stageId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -161,12 +175,12 @@ export default function StagesClasses() {
     // --- Class Actions ---
 
     const handleAddClass = async () => {
-        if (!newClassName.trim() || !selectedStageId) return;
+        if (!newClassName.trim() || !selectedStageId || !schoolId) return;
 
         try {
             const { error } = await supabase
                 .from('classes')
-                .insert([{ name: newClassName, stage_id: selectedStageId }]);
+                .insert([{ name: newClassName, stage_id: selectedStageId, school_id: schoolId }]);
 
             if (error) throw error;
 
@@ -186,7 +200,8 @@ export default function StagesClasses() {
             const { error } = await supabase
                 .from('classes')
                 .update({ name: editingClass.name })
-                .eq('id', editingClass.id);
+                .eq('id', editingClass.id)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -205,7 +220,8 @@ export default function StagesClasses() {
             const { error } = await supabase
                 .from('classes')
                 .delete()
-                .eq('id', classId);
+                .eq('id', classId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 

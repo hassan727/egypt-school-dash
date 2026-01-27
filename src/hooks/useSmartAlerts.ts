@@ -5,8 +5,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { smartAlerts, SmartAlert } from '@/services/smartAlertsService';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 export function useSmartAlerts() {
+  const schoolId = useSystemSchoolId();
   const [alerts, setAlerts] = useState<SmartAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -15,7 +17,11 @@ export function useSmartAlerts() {
   const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true);
-      const activeAlerts = await smartAlerts.getActiveAlerts();
+      if (!schoolId) {
+        setAlerts([]);
+        return;
+      }
+      const activeAlerts = await smartAlerts.getActiveAlerts(schoolId);
       setAlerts(activeAlerts);
       setLastRefresh(new Date());
     } catch (err) {
@@ -29,7 +35,8 @@ export function useSmartAlerts() {
   const runAnalytics = useCallback(async () => {
     try {
       setLoading(true);
-      await smartAlerts.runAllAnalytics();
+      if (!schoolId) return;
+      await smartAlerts.runAllAnalytics(schoolId);
       // إعادة جلب التنبيهات بعد التحليلات
       setTimeout(() => fetchAlerts(), 1000);
     } catch (err) {
@@ -61,13 +68,17 @@ export function useSmartAlerts() {
 
   // جلب التنبيهات عند التحميل
   useEffect(() => {
-    fetchAlerts();
+    if (schoolId) {
+      fetchAlerts();
+    }
 
     // تحديث دوري كل 5 دقائق
-    const interval = setInterval(fetchAlerts, 5 * 60 * 1000);
+    const interval = setInterval(() => {
+      if (schoolId) fetchAlerts();
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [fetchAlerts]);
+  }, [fetchAlerts, schoolId]);
 
   // الإحصائيات
   const stats = {

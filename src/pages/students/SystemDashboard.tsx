@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useCrossTabSync } from '@/hooks/useCrossTabSync';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import {
     Users,
     TrendingUp,
@@ -40,6 +41,7 @@ interface RecentActivity {
 
 export default function SystemDashboard() {
     const navigate = useNavigate();
+    const schoolId = useSystemSchoolId();
     const { notifications, addNotification } = useCrossTabSync();
     const [stats, setStats] = useState<SystemStats>({
         totalStudents: 0,
@@ -68,25 +70,29 @@ export default function SystemDashboard() {
                 // Fetch students count
                 const { data: students, error: studentsError } = await supabase
                     .from('students')
-                    .select('id, full_name_ar, stage, class', { count: 'exact' });
+                    .select('id, full_name_ar, stage, class', { count: 'exact' })
+                    .eq('school_id', schoolId);
 
                 if (studentsError) throw studentsError;
 
                 // Fetch financial data
                 const { data: fees } = await supabase
                     .from('school_fees')
-                    .select('total_amount, advance_payment');
+                    .select('total_amount, advance_payment')
+                    .eq('school_id', schoolId);
 
                 // Fetch attendance data
                 const { data: attendance } = await supabase
                     .from('attendance_records')
                     .select('status, student_id')
+                    .eq('school_id', schoolId)
                     .eq('status', 'غائب');
 
                 // Fetch behavioral records
                 const { data: behavioral } = await supabase
                     .from('behavioral_records')
-                    .select('id, disciplinary_issues');
+                    .select('id, disciplinary_issues')
+                    .eq('school_id', schoolId);
 
                 // Calculate statistics
                 const totalStudents = students?.length || 0;
@@ -152,8 +158,8 @@ export default function SystemDashboard() {
             }
         };
 
-        fetchStats();
-    }, []);
+        if (schoolId) fetchStats();
+    }, [schoolId]);
 
     const chartData = [
         { name: 'طلاب نشطين', value: stats.activeStudents, fill: '#10b981' },

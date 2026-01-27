@@ -20,7 +20,8 @@ const EmployeeJobPage = () => {
         employee_type: '',
         contract_type: '',
         hire_date: '',
-        status: ''
+        status: '',
+        shift_id: ''
     });
 
     useEffect(() => {
@@ -44,7 +45,8 @@ const EmployeeJobPage = () => {
                 employee_type: data.employee_type || 'full_time',
                 contract_type: data.contract_type || 'permanent',
                 hire_date: data.hire_date || '',
-                status: data.status || 'active'
+                status: data.status || 'active',
+                shift_id: data.shift_id || ''
             });
         } catch (error) {
             console.error('Error fetching employee job data:', error);
@@ -67,7 +69,8 @@ const EmployeeJobPage = () => {
                     employee_type: formData.employee_type,
                     contract_type: formData.contract_type,
                     hire_date: formData.hire_date,
-                    status: formData.status
+                    status: formData.status,
+                    shift_id: formData.shift_id || null
                 })
                 .eq('id', employeeId);
 

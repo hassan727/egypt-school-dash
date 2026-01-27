@@ -7,9 +7,9 @@ import { arrayToCSV } from '@/utils/helpers';
  */
 export class ReportsService {
     // توليد تقرير طلاب
-    static async generateStudentsReport(filters?: any) {
+    static async generateStudentsReport(schoolId: string, filters?: any) {
         try {
-            const data = await StudentService.exportStudentsData(filters);
+            const data = await StudentService.exportStudentsData(schoolId, filters);
             return {
                 name: 'تقرير الطلاب',
                 data,
@@ -22,10 +22,10 @@ export class ReportsService {
     }
 
     // توليد تقرير مالي
-    static async generateFinancialReport() {
+    static async generateFinancialReport(schoolId: string) {
         try {
-            const stats = await AnalyticsService.getFinancialStats();
-            const { data } = await StudentService.exportStudentsData();
+            const stats = await AnalyticsService.getFinancialStats(schoolId);
+            const data = await StudentService.exportStudentsData(schoolId);
 
             const report = {
                 title: 'التقرير المالي',

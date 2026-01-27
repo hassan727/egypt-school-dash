@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useBatchContext } from "@/components/batch/BatchContext";
 import { useBatchStudents } from "@/hooks/useBatchStudents";
 import { useDatabaseStagesClasses } from "@/hooks/useDatabaseStagesClasses";
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +33,7 @@ const BatchAcademicPage = () => {
     const { classId, className, stageName, refreshContext } = useBatchContext();
     const { students, isLoading: studentsLoading, refetch } = useBatchStudents(classId);
     const { stages, getClassesByStage, loading: stagesLoading } = useDatabaseStagesClasses();
+    const schoolId = useSystemSchoolId();
 
     const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
     const [targetStageId, setTargetStageId] = useState<string>("");
@@ -57,6 +59,7 @@ const BatchAcademicPage = () => {
                     registration_status
                 `)
                 .order('updated_at', { ascending: false })
+                .eq('school_id', schoolId)
                 .limit(5);
 
             if (classId) {
@@ -73,8 +76,8 @@ const BatchAcademicPage = () => {
     };
 
     React.useEffect(() => {
-        fetchRecentLogs();
-    }, [classId, isSaving]); // Re-fetch when context changes or after a save operation
+        if (schoolId) fetchRecentLogs();
+    }, [classId, isSaving, schoolId]); // Re-fetch when context changes or after a save operation
 
     // Filter classes based on selected target stage
     const availableClasses = targetStageId ? getClassesByStage(targetStageId) : [];
@@ -139,6 +142,7 @@ const BatchAcademicPage = () => {
             const { error } = await supabase
                 .from('students')
                 .update(updates)
+                .eq('school_id', schoolId)
                 .in('id', selectedStudents);
 
             if (error) throw error;

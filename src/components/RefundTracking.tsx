@@ -9,6 +9,7 @@ import { AlertCircle, CheckCircle, XCircle, Clock, Eye, Loader } from 'lucide-re
 import { toast } from 'sonner';
 import { StudentService } from '@/services/studentService';
 import type { Refund } from '@/types/student';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface RefundTrackingProps {
     studentId?: string;
@@ -17,6 +18,7 @@ interface RefundTrackingProps {
 }
 
 export function RefundTracking({ studentId, showPendingOnly = false, showAllRequests = false }: RefundTrackingProps) {
+    const schoolId = useSystemSchoolId();
     const [refunds, setRefunds] = useState<Refund[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedRefund, setSelectedRefund] = useState<Refund | null>(null);
@@ -24,19 +26,21 @@ export function RefundTracking({ studentId, showPendingOnly = false, showAllRequ
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
-        loadRefunds();
+        if (schoolId) loadRefunds();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [studentId, showPendingOnly, showAllRequests]);
+    }, [studentId, showPendingOnly, showAllRequests, schoolId]);
 
     const loadRefunds = async () => {
         try {
             setLoading(true);
             let data: Refund[] = [];
 
+            if (!schoolId) return;
+
             if (showAllRequests) {
-                data = await StudentService.getPendingRefunds();
+                data = await StudentService.getPendingRefunds(schoolId);
             } else if (studentId) {
-                data = await StudentService.getStudentRefunds(studentId);
+                data = await StudentService.getStudentRefunds(schoolId, studentId);
             }
 
             if (showPendingOnly) {
@@ -75,8 +79,8 @@ export function RefundTracking({ studentId, showPendingOnly = false, showAllRequ
 
     const filteredRefunds = refunds.filter(refund => {
         const statusMatch = filterStatus === 'كل' || refund.status === filterStatus;
-        const searchMatch = 
-            !searchTerm || 
+        const searchMatch =
+            !searchTerm ||
             refund.studentId.includes(searchTerm) ||
             refund.academicYearCode.includes(searchTerm);
         return statusMatch && searchMatch;

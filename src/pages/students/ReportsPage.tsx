@@ -10,6 +10,7 @@ import { useGlobalFilter } from '@/context/GlobalFilterContext';
 import { useBatchStudents } from '@/hooks/useBatchStudents';
 import { AnalyticsService } from '@/services/analyticsService';
 import { ReportsService } from '@/services/reportsService';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { AttendanceReportPrint } from '@/components/AttendanceReportPrint';
 import { ManualReportPrint } from '@/components/ManualReportPrint';
 import { ManualReportsService, ManualReportSummary } from '@/services/manualReportsService';
@@ -104,6 +105,7 @@ interface StudentRecord {
 
 const ReportsPage = () => {
   const { selectedYear, stagesClasses, selectedClass, setSelectedClass, selectedStage, setSelectedStage } = useGlobalFilter();
+  const schoolId = useSystemSchoolId();
   const [searchParams] = useSearchParams();
   const classId = selectedClass && selectedClass !== 'all' ? selectedClass : '';
   const { students } = useBatchStudents(classId || null);
@@ -132,7 +134,37 @@ const ReportsPage = () => {
   const [levelReports, setLevelReports] = useState<LevelReport[]>([]);
 
   const [schoolInfo, setSchoolInfo] = useState<any>(null);
-  const [showPrintDialog, setShowPrintDialog] = useState(false);
+
+  // دالة الطباعة الاحترافية
+  const handlePrint = () => {
+    AttendanceReportPrint({
+      data: {
+        reportType: reportType as 'class' | 'stage' | 'school',
+        dateRange: {
+          startDate: dateMode === 'single' ? singleDate : startDate,
+          endDate: dateMode === 'single' ? singleDate : endDate,
+        },
+        classInfo,
+        dailyRecords,
+        studentRecords,
+        classSummary,
+        stageInfo,
+        stageClasses,
+        stageSummary,
+        schoolStages,
+        schoolSummary,
+        levelReports,
+        selectedYear,
+        supervisorNotes,
+        schoolInfo: schoolInfo ? {
+          name: schoolInfo.name,
+          logo_url: schoolInfo.logo || schoolInfo.logo_url,
+          ministry_header: schoolInfo.ministry_header,
+          directorate: schoolInfo.directorate
+        } : undefined,
+      }
+    });
+  };
 
   // Manual Entry States
   const [manualEntries, setManualEntries] = useState<ManualClassEntry[]>([]);
@@ -204,15 +236,16 @@ const ReportsPage = () => {
   // جلب معلومات المدرسة
   useEffect(() => {
     const fetchSchoolInfo = async () => {
+      if (!schoolId) return;
       try {
-        const info = await AnalyticsService.getSchoolInfo();
+        const info = await AnalyticsService.getSchoolInfo(schoolId);
         setSchoolInfo(info);
       } catch (err) {
         console.error('Error fetching school info:', err);
       }
     };
-    fetchSchoolInfo();
-  }, []);
+    if (schoolId) fetchSchoolInfo();
+  }, [schoolId]);
 
   // تهيئة التواريخ
   useEffect(() => {
@@ -233,7 +266,7 @@ const ReportsPage = () => {
 
   // توليد التقرير
   const handleGenerate = async () => {
-    if (!canGenerate) return;
+    if (!canGenerate || !schoolId) return;
     setIsLoading(true);
 
     try {
@@ -243,6 +276,7 @@ const ReportsPage = () => {
       if (reportType === 'class' && classId) {
         // تقرير الفصل اليومي
         const dailyReport = await AnalyticsService.getDailyClassAttendanceReport(
+          schoolId,
           classId,
           effectiveStartDate,
           effectiveEndDate
@@ -252,6 +286,7 @@ const ReportsPage = () => {
 
         // تقرير تفاصيل الطلاب
         const classReport = await AnalyticsService.getClassAttendanceReport(
+          schoolId,
           classId,
           effectiveStartDate,
           effectiveEndDate
@@ -262,6 +297,7 @@ const ReportsPage = () => {
       } else if (reportType === 'stage' && selectedStage && selectedStage !== 'all') {
         // تقرير المرحلة
         const stageReport = await AnalyticsService.getStageAttendanceReport(
+          schoolId,
           selectedStage,
           effectiveStartDate,
           effectiveEndDate
@@ -275,6 +311,7 @@ const ReportsPage = () => {
       } else if (reportType === 'school') {
         // تقرير المدرسة
         const schoolReport = await AnalyticsService.getSchoolAttendanceReport(
+          schoolId,
           effectiveStartDate,
           effectiveEndDate
         );
@@ -295,8 +332,9 @@ const ReportsPage = () => {
 
   // ===== Manual Report Database Functions =====
   const loadSavedReports = async () => {
+    if (!schoolId) return;
     const yearToFetch = showAllYears ? null : selectedYear;
-    const reports = await ManualReportsService.getReportsList(yearToFetch);
+    const reports = await ManualReportsService.getReportsList(schoolId, yearToFetch);
     setSavedReports(reports);
   };
 
@@ -318,9 +356,16 @@ const ReportsPage = () => {
 
     let result;
 
+    if (!schoolId) {
+      alert('⚠️ خطأ: لم يتم تحديد المدرسة.');
+      setIsSaving(false);
+      return;
+    }
+
     if (editingReportId) {
       // حالة التعديل: تحديث التقرير الحالي
       const success = await ManualReportsService.updateReport(
+        schoolId,
         editingReportId,
         entries,
         manualReportTitle || `تقرير ${manualReportDate}`,
@@ -336,6 +381,7 @@ const ReportsPage = () => {
       }
 
       result = await ManualReportsService.saveReport(
+        schoolId,
         entries,
         manualReportDate,
         selectedYear,
@@ -353,12 +399,13 @@ const ReportsPage = () => {
       setEditingReportId(null);
       loadSavedReports();
     } else {
-      alert('❌ خطأ في حفظ التقرير: ' + (result as any).error);
+      alert('❌ خطأ في حفظ التقرير: ' + ((result as any).error || 'حدث خطأ غير معروف'));
     }
   };
 
   const handleLoadReport = async (reportId: string) => {
-    const report = await ManualReportsService.getReportById(reportId);
+    if (!schoolId) return;
+    const report = await ManualReportsService.getReportById(schoolId, reportId);
     if (report && report.entries) {
       setManualEntries(report.entries.map((e: any) => ({
         stageId: e.stage_id,
@@ -380,7 +427,8 @@ const ReportsPage = () => {
   };
 
   const handleEditReport = async (reportId: string) => {
-    const report = await ManualReportsService.getReportById(reportId);
+    if (!schoolId) return;
+    const report = await ManualReportsService.getReportById(schoolId, reportId);
     if (report && report.entries) {
       setManualEntries(report.entries.map((e: any) => ({
         stageId: e.stage_id,
@@ -409,14 +457,14 @@ const ReportsPage = () => {
   };
 
   const handleDeleteReport = async (reportId: string) => {
+    if (!schoolId) return;
     if (!confirm('هل أنت متأكد من حذف هذا التقرير؟')) return;
-    const success = await ManualReportsService.deleteReport(reportId);
+    const success = await ManualReportsService.deleteReport(schoolId, reportId);
     if (success) {
       loadSavedReports();
     }
   };
 
-  // Load reports when switching to manual tab
   // Load reports when switching to manual tab
   useEffect(() => {
     if (reportType === 'manual') {
@@ -817,7 +865,7 @@ const ReportsPage = () => {
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={() => setShowPrintDialog(true)}
+                  onClick={handlePrint}
                   disabled={isLoading}
                   className="bg-green-600 hover:bg-green-700"
                 >
@@ -1280,7 +1328,7 @@ const ReportsPage = () => {
                       onClick={() => ManualReportPrint({
                         entries: sortedManualEntries,
                         academicYear: selectedYear,
-                        schoolName: 'مدرسة جاد الله'
+                        schoolName: schoolInfo?.name || 'مدرسة جاد الله'
                       })}
                       className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700"
                     >
@@ -1772,33 +1820,7 @@ const ReportsPage = () => {
         </Card >
       </div >
 
-      {/* مكون الطباعة الاحترافية */}
-      {
-        showPrintDialog && (
-          <AttendanceReportPrint
-            data={{
-              reportType: reportType as 'class' | 'stage' | 'school',
-              dateRange: {
-                startDate: dateMode === 'single' ? singleDate : startDate,
-                endDate: dateMode === 'single' ? singleDate : endDate,
-              },
-              classInfo,
-              dailyRecords,
-              studentRecords,
-              classSummary,
-              stageInfo,
-              stageClasses,
-              stageSummary,
-              schoolStages,
-              schoolSummary,
-              levelReports,
-              selectedYear,
-              supervisorNotes,
-            }}
-            onClose={() => setShowPrintDialog(false)}
-          />
-        )
-      }
+      {/* مكون الطباعة اليدوي يتم استدعاؤه كدالة */}
     </DashboardLayout >
   );
 };

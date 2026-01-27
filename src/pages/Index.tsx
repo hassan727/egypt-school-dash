@@ -33,6 +33,7 @@ import {
   Loader2,
   Calendar,
   Percent,
+  Clock,
 } from "lucide-react";
 
 interface DashboardStats {
@@ -390,6 +391,15 @@ const Index = () => {
       icon: History,
       gradient: "bg-gradient-to-br from-violet-500 to-violet-600",
       route: "/students",
+    },
+    {
+      title: "سجل بصمة الموظفين",
+      value: "تتبع الآن",
+      description: "نظام الحضور الذكي",
+      icon: Clock,
+      gradient: "bg-gradient-to-br from-blue-700 to-indigo-800",
+      route: "/hr/attendance",
+      accountingLogic: "النظام الشامل لمتابعة حضور وانصراف جميع الموظفين (HR)",
     },
   ], [loading, stats]);
 

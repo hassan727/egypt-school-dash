@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Save, X, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { validateSection, validateStudentData } from '@/utils/studentValidation';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import type { StudentProfile, PersonalData, EnrollmentData, GuardianData, MotherData, EmergencyContact, SchoolFees, OtherExpense, LegalGuardianshipData } from '@/types/student';
 
 /**
@@ -31,6 +32,7 @@ import type { StudentProfile, PersonalData, EnrollmentData, GuardianData, Mother
  */
 const CreateStudentPage = () => {
     const navigate = useNavigate();
+    const schoolId = useSystemSchoolId();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [sectionErrors, setSectionErrors] = useState<Record<string, string[]>>({});
     const [sectionSaved, setSectionSaved] = useState<Record<string, boolean>>({});
@@ -286,6 +288,7 @@ const CreateStudentPage = () => {
                 .from('students')
                 .insert({
                     student_id: newStudentId,
+                    school_id: schoolId,
                     // Personal Data
                     full_name_ar: studentProfile.personalData.fullNameAr,
                     national_id: studentProfile.personalData.nationalId,
@@ -351,6 +354,7 @@ const CreateStudentPage = () => {
                     .insert(
                         studentProfile.emergencyContacts.map(contact => ({
                             student_id: newStudentId,
+                            school_id: schoolId,
                             contact_name: contact.contactName,
                             relationship: contact.relationship,
                             phone: contact.phone,
@@ -368,6 +372,7 @@ const CreateStudentPage = () => {
                 .from('school_fees')
                 .insert({
                     student_id: newStudentId,
+                    school_id: schoolId,
                     total_amount: studentProfile.schoolFees.totalAmount,
                     installment_count: studentProfile.schoolFees.installmentCount,
                     advance_payment: studentProfile.schoolFees.advancePayment,
@@ -382,6 +387,7 @@ const CreateStudentPage = () => {
                     .insert(
                         studentProfile.otherExpenses.map(expense => ({
                             student_id: newStudentId,
+                            school_id: schoolId,
                             expense_type: expense.expenseType,
                             quantity: expense.quantity,
                             total_price: expense.totalPrice,

@@ -1,4 +1,4 @@
-import { Home, Users, DollarSign, GraduationCap, ChevronDown, Settings, Briefcase, UserCog, AlertCircle } from "lucide-react";
+import { Home, Users, DollarSign, GraduationCap, ChevronDown, Settings, Briefcase, UserCog, AlertCircle, Calendar } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,114 +16,107 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useState } from "react";
 
-const menuItems = [
-  {
-    title: "الرئيسية",
-    icon: Home,
-    url: "/",
-  },
-  {
-    title: "إدارة الطلاب",
-    icon: GraduationCap,
-    items: [
-      { title: "قائمة الطلاب", url: "/students/list" },
-      { title: "تسجيل طالب جديد", url: "/students/create" },
-      { title: "العمليات الجماعية", url: "/students/batch/operations" },
-      { title: "الحضور والغياب", url: "/students/batch/attendance" },
-
-      { title: "الشهادات", url: "/students/certificates" },
-    ],
-  },
-  {
-    title: "الإدارة المالية",
-    icon: DollarSign,
-    items: [
-      { title: "لوحة التحكم المالية", url: "/finance/dashboard" },
-      { title: "الإيرادات", url: "/finance/revenue" },
-      { title: "المصروفات", url: "/finance/expenses" },
-      { title: "الرواتب والموظفين", url: "/finance/salaries" },
-      { title: "متابعة المستحقات", url: "/finance/receivables" },
-    ],
-  },
-  {
-    title: "إدارة المعلمين",
-    icon: Users,
-    items: [
-      { title: "قائمة المعلمين", url: "/teachers" },
-      { title: "تعيين معلم جديد", url: "/teachers/new" },
-      { title: "الحضور والغياب", url: "/teachers/attendance" },
-      { title: "التقييمات", url: "/teachers/evaluation" },
-    ],
-  },
-  {
-    title: "الموارد البشرية",
-    icon: Briefcase,
-    items: [
-      // إدارة الموظفين
-      { title: "📋 قائمة الموظفين", url: "/hr/employees" },
-      { title: "➕ تسجيل موظف جديد", url: "/hr/employees/new" },
-      { title: "📁 المنتهية خدمتهم", url: "/hr/employees/terminated" },
-      // الحضور والانصراف
-      { title: "⏰ سجل البصمة", url: "/hr/attendance" },
-      { title: "🔄 ضبط الورديات", url: "/hr/attendance/shifts" },
-      { title: "⚙️ إعدادات الحضور", url: "/hr/attendance/settings" },
-      { title: "📊 تقارير الحضور", url: "/hr/attendance/reports" },
-      // الجداول الدراسية
-      { title: "📅 الجداول الدراسية", url: "/hr/schedules" },
-      { title: "🔄 بدائل الحصص", url: "/hr/schedules/substitution" },
-      // الإجازات
-      { title: "🏖️ إدارة الإجازات", url: "/hr/leaves" },
-      { title: "✅ الموافقات", url: "/hr/leaves/approvals" },
-      // الرواتب
-      { title: "💰 رواتب HR", url: "/hr/payroll" },
-      { title: "📤 إرسال للمالية", url: "/hr/payroll/export" },
-      // العقود
-      { title: "📄 العقود", url: "/hr/contracts" },
-      // التقييم
-      { title: "⭐ تقييم الأداء", url: "/hr/performance" },
-      // التدريب
-      { title: "📚 التدريب", url: "/hr/training" },
-      // المخالفات
-      { title: "⚠️ المخالفات والإنذارات", url: "/hr/violations" },
-      // نهاية الخدمة
-      { title: "🚪 نهاية الخدمة", url: "/hr/offboarding" },
-      // التقارير
-      { title: "📈 تقارير HR", url: "/hr/reports" },
-      // الإعدادات
-      { title: "⚙️ إعدادات HR", url: "/hr/settings" },
-    ],
-  },
-  {
-    title: "إعدادات الطلاب",
-    icon: UserCog,
-    items: [
-      { title: "📋 بيانات الطلاب", url: "/students/settings/data" },
-      { title: "🔐 حسابات الطلاب", url: "/students/settings/accounts" },
-      { title: "📥 استيراد Excel", url: "/students/settings/import" },
-    ],
-  },
-  {
-    title: "مراقبة النظام",
-    icon: AlertCircle,
-    items: [
-      { title: "🔴 مراقبة الأخطاء", url: "/admin/error-monitoring" },
-    ],
-  },
-  {
-    title: "إعدادات النظام",
-    icon: Settings,
-    items: [
-      { title: "👥 إدارة المستخدمين", url: "/settings/users" },
-      { title: "🏫 إدارة المدارس", url: "/settings/schools" },
-      { title: "📚 المراحل والفصول", url: "/settings/stages-classes" },
-      { title: "🔐 تسجيل الدخول", url: "/login" },
-    ],
-  },
-];
+import { useSchoolFeatures } from "@/context/SystemContext";
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const [openItems, setOpenItems] = useState<string[]>(["إدارة الطلاب"]);
+  const features = useSchoolFeatures();
+
+  const menuItems = [
+    {
+      title: "الرئيسية",
+      icon: Home,
+      url: "/",
+      visible: true
+    },
+    {
+      title: "إدارة الطلاب",
+      icon: GraduationCap,
+      visible: features.students,
+      items: [
+        { title: "قائمة الطلاب", url: "/students/list" },
+        { title: "تسجيل طالب جديد", url: "/students/create" },
+        { title: "العمليات الجماعية", url: "/students/batch/operations" },
+        { title: "الحضور والغياب", url: "/students/batch/attendance" },
+        { title: "الشهادات", url: "/students/certificates" },
+      ],
+    },
+    {
+      title: "الكنترول المدرسي",
+      icon: Calendar,
+      visible: true,
+      items: [
+        { title: "رصد الدرجات", url: "/school-control" },
+      ],
+    },
+    {
+      title: "الإدارة المالية",
+      icon: DollarSign,
+      visible: features.finance,
+      items: [
+        { title: "لوحة التحكم المالية", url: "/finance/dashboard" },
+        { title: "الإيرادات", url: "/finance/revenue" },
+        { title: "المصروفات", url: "/finance/expenses" },
+        { title: "الرواتب والموظفين", url: "/finance/salaries" },
+        { title: "متابعة المستحقات", url: "/finance/receivables" },
+      ],
+    },
+    {
+      title: "الموارد البشرية",
+      icon: Briefcase,
+      visible: features.hr,
+      items: [
+        { title: "📋 قائمة الموظفين", url: "/hr/employees" },
+        { title: "➕ تسجيل موظف جديد", url: "/hr/employees/new" },
+        { title: "📁 المنتهية خدمتهم", url: "/hr/employees/terminated" },
+        { title: "⏰ سجل البصمة", url: "/hr/attendance" },
+        { title: "🔄 ضبط الورديات", url: "/hr/attendance/shifts" },
+        { title: "⚙️ إعدادات الحضور", url: "/hr/attendance/settings" },
+        { title: "📊 تقارير الحضور", url: "/hr/attendance/reports" },
+        { title: "🏖️ إدارة الإجازات", url: "/hr/leaves" },
+        { title: "✅ الموافقات", url: "/hr/leaves/approvals" },
+        { title: "💰 رواتب HR", url: "/hr/payroll" },
+        { title: "📤 إرسال للمالية", url: "/hr/payroll/export" },
+        { title: "📄 العقود", url: "/hr/contracts" },
+        { title: "⭐ تقييم الأداء", url: "/hr/performance" },
+        { title: "📚 التدريب", url: "/hr/training" },
+        { title: "⚠️ المخالفات والإنذارات", url: "/hr/violations" },
+        { title: "🚪 نهاية الخدمة", url: "/hr/offboarding" },
+        { title: "📈 تقارير HR", url: "/hr/reports" },
+        { title: "⚙️ إعدادات HR", url: "/hr/settings" },
+      ],
+    },
+    {
+      title: "إعدادات الطلاب",
+      icon: UserCog,
+      visible: features.students,
+      items: [
+        { title: "📋 بيانات الطلاب", url: "/students/settings/data" },
+        { title: "🔐 حسابات الطلاب", url: "/students/settings/accounts" },
+        { title: "📥 استيراد Excel", url: "/students/settings/import" },
+      ],
+    },
+    {
+      title: "مراقبة النظام",
+      icon: AlertCircle,
+      visible: true,
+      items: [
+        { title: "🔴 مراقبة الأخطاء", url: "/admin/error-monitoring" },
+      ],
+    },
+    {
+      title: "إعدادات النظام",
+      icon: Settings,
+      visible: true,
+      items: [
+        { title: "👥 إدارة المستخدمين", url: "/settings/users" },
+        { title: "🏫 إدارة المدارس", url: "/settings/schools" },
+        { title: "📚 المراحل والفصول", url: "/settings/stages-classes" },
+        { title: "🔐 تسجيل الدخول", url: "/login" },
+      ],
+    },
+  ];
 
   const toggleItem = (title: string) => {
     setOpenItems((prev) =>
@@ -140,7 +133,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => {
+              {menuItems.filter(item => item.visible !== false).map((item) => {
                 const isOpen = openItems.includes(item.title);
                 const hasSubmenu = item.items && item.items.length > 0;
 

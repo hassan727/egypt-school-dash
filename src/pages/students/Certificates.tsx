@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { PageLayout } from "@/components/PageLayout";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
@@ -35,10 +36,11 @@ const Certificates = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterYear, setFilterYear] = useState('all');
+  const schoolId = useSystemSchoolId();
 
   useEffect(() => {
-    fetchCertificates();
-  }, []);
+    if (schoolId) fetchCertificates();
+  }, [schoolId]);
 
   const fetchCertificates = async () => {
     try {
@@ -51,6 +53,7 @@ const Certificates = () => {
             full_name_ar
           )
         `)
+        .eq('school_id', schoolId)
         .order('issue_date', { ascending: false });
 
       const { data, error } = await query;
@@ -72,8 +75,8 @@ const Certificates = () => {
 
   const filteredCertificates = certificates.filter(cert => {
     const matchesSearch = cert.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         cert.student_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         cert.certificate_number.toLowerCase().includes(searchTerm.toLowerCase());
+      cert.student_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cert.certificate_number.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesType = filterType === 'all' || cert.certificate_type === filterType;
     const matchesYear = filterYear === 'all' || cert.academic_year === filterYear;

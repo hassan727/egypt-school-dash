@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { STAGES_AND_CLASSES_DATA } from '@/hooks/useStagesAndClasses';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalFilter } from '@/context/GlobalFilterContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,10 +30,27 @@ export const GlobalSearchFilter = () => {
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searching, setSearching] = useState(false);
 
+
+
     // Derived Filter Options
     const uniqueStages = useMemo(() => {
-        const stages = new Set(stagesClasses.map(item => item.stage_name));
-        return Array.from(stages);
+        const stages = Array.from(new Set(stagesClasses.map(item => item.stage_name)));
+
+        // Sort stages based on the defined order in STAGES_AND_CLASSES_DATA
+        const stageOrder = Object.keys(STAGES_AND_CLASSES_DATA);
+
+        return stages.sort((a, b) => {
+            const indexA = stageOrder.indexOf(a);
+            const indexB = stageOrder.indexOf(b);
+            // If both are found in the order list, compare indices
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            // If only A is found, it comes first
+            if (indexA !== -1) return -1;
+            // If only B is found, it comes first
+            if (indexB !== -1) return 1;
+            // Fallback to alphabetical sort for unknown stages
+            return a.localeCompare(b, 'ar');
+        });
     }, [stagesClasses]);
 
     const availableClasses = useMemo(() => {

@@ -15,18 +15,19 @@ export interface SmartAlert {
   affected_entity: string; // student_id, employee_id, إلخ
   affected_entity_type: 'student' | 'employee' | 'teacher' | 'school';
   recommended_action: string;
-  
+
   // البيانات الحالية
   current_value: any;
   threshold_value: any;
-  
+
   // الحالة
   status: 'active' | 'dismissed' | 'resolved';
   dismissed_at?: string;
   resolved_at?: string;
-  
+
   created_at?: string;
   updated_at?: string;
+  school_id?: string;
 }
 
 // ====================================
@@ -40,8 +41,9 @@ class SmartAlertsService {
    * - دفع أقل من 30% من الرسوم
    * - وقت الاستحقاق قادم في أسبوع
    */
-  async analyzeStudentPaymentStatus(): Promise<void> {
+  async analyzeStudentPaymentStatus(schoolId: string): Promise<void> {
     try {
+      if (!schoolId) return;
       const { data: students } = await supabase
         .from('school_fees')
         .select(`
@@ -54,6 +56,7 @@ class SmartAlertsService {
             full_name_ar
           )
         `)
+        .eq('school_id', schoolId)
         .order('created_at', { ascending: false });
 
       if (!students) return;
@@ -67,6 +70,7 @@ class SmartAlertsService {
         const { data: payments } = await supabase
           .from('financial_transactions')
           .select('amount')
+          .eq('school_id', schoolId)
           .eq('student_id', studentId)
           .eq('transaction_type', 'دفعة');
 
@@ -86,7 +90,7 @@ class SmartAlertsService {
             recommended_action: 'التواصل مع ولي الأمر وتذكيره بالأقساط المستحقة',
             current_value: paymentPercentage.toFixed(1),
             threshold_value: 30,
-          });
+          }, schoolId);
         }
 
         // إذا لم يدفع شيء
@@ -101,7 +105,7 @@ class SmartAlertsService {
             recommended_action: 'التواصل الفوري مع ولي الأمر',
             current_value: 0,
             threshold_value: 0,
-          });
+          }, schoolId);
         }
       }
     } catch (err) {
@@ -115,19 +119,25 @@ class SmartAlertsService {
    * - متوسط درجاته أقل من 40%
    * - لديه درجات متدنية في مادتين أو أكثر
    */
-  async analyzeStudentFailureRisk(): Promise<void> {
+  async analyzeStudentFailureRisk(schoolId: string): Promise<void> {
     try {
+      if (!schoolId) return;
+      // Note: Assuming grades table has school_id or we rely on student_id.school_id filter if possible.
+      // For now, let's try to filter by school_id if the column exists, otherwise we rely on inner join filtering.
+      // Since explicit school_id is safer, we assume it exists or we filter via student.
       const { data: students } = await supabase
         .from('grades')
         .select(`
           student_id,
           final_grade,
-          student_id (
+          student_id!inner (
             id,
             student_id,
-            full_name_ar
+            full_name_ar,
+            school_id
           )
         `)
+        .eq('student_id.school_id', schoolId) // Filter by school via student relation
         .gt('final_grade', 0);
 
       if (!students || students.length === 0) return;
@@ -161,7 +171,7 @@ class SmartAlertsService {
             recommended_action: 'جلسة مع المعلمين + دعم إضافي',
             current_value: average.toFixed(1),
             threshold_value: 40,
-          });
+          }, schoolId);
         }
 
         // درجات متدنية في مواد متعددة
@@ -176,7 +186,7 @@ class SmartAlertsService {
             recommended_action: 'اجتماع مع الآباء + تحديد مواد الضعف',
             current_value: failCount,
             threshold_value: 1,
-          });
+          }, schoolId);
         }
       }
     } catch (err) {
@@ -191,8 +201,9 @@ class SmartAlertsService {
    * - غاب أكثر من 5 أيام بدون سبب
    * - نمط غياب مشبوه (مثل: يغيب دائماً يوم الاثنين)
    */
-  async analyzeEmployeeAttendancePattern(): Promise<void> {
+  async analyzeEmployeeAttendancePattern(schoolId: string): Promise<void> {
     try {
+      if (!schoolId) return;
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       const endOfMonth = new Date(startOfMonth);
@@ -213,7 +224,8 @@ class SmartAlertsService {
           )
         `)
         .gte('date', startOfMonth.toISOString().split('T')[0])
-        .lte('date', endOfMonth.toISOString().split('T')[0]);
+        .lte('date', endOfMonth.toISOString().split('T')[0])
+        .eq('school_id', schoolId);
 
       if (!attendance) return;
 
@@ -258,7 +270,7 @@ class SmartAlertsService {
             recommended_action: 'إنذار تحذيري من قبل المشرف المباشر',
             current_value: stats.lateDays,
             threshold_value: 10,
-          });
+          }, schoolId);
         }
 
         // غياب متكرر
@@ -273,7 +285,7 @@ class SmartAlertsService {
             recommended_action: 'اجتماع مباشر + إنذار رسمي',
             current_value: stats.absentDays,
             threshold_value: 5,
-          });
+          }, schoolId);
         }
       }
     } catch (err) {
@@ -287,8 +299,9 @@ class SmartAlertsService {
    * - رواتب معلقة لأكثر من شهر
    * - فرق كبير بين الراتب المتوقع والفعلي
    */
-  async analyzeSalaryDelays(): Promise<void> {
+  async analyzeSalaryDelays(schoolId: string): Promise<void> {
     try {
+      if (!schoolId) return;
       const { data: pendingSalaries } = await supabase
         .from('salaries')
         .select(`
@@ -302,7 +315,8 @@ class SmartAlertsService {
             employee_code
           )
         `)
-        .eq('status', 'مستحق');
+        .eq('status', 'مستحق')
+        .eq('school_id', schoolId);
 
       if (!pendingSalaries) return;
 
@@ -332,12 +346,14 @@ class SmartAlertsService {
   /**
    * إنشاء تنبيه جديد (مع تجنب التكرار)
    */
-  private async createAlert(alert: SmartAlert): Promise<void> {
+  private async createAlert(alert: SmartAlert, schoolId: string): Promise<void> {
     try {
+      if (!schoolId) return;
       // تحقق من وجود تنبيه نشط مشابه
       const { data: existingAlert } = await supabase
         .from('smart_alerts')
         .select('id')
+        .eq('school_id', schoolId)
         .eq('alert_type', alert.alert_type)
         .eq('affected_entity', alert.affected_entity)
         .eq('status', 'active')
@@ -350,6 +366,7 @@ class SmartAlertsService {
       const { error } = await supabase.from('smart_alerts').insert([
         {
           ...alert,
+          school_id: schoolId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
@@ -366,14 +383,15 @@ class SmartAlertsService {
   /**
    * تشغيل جميع التحليلات
    */
-  async runAllAnalytics(): Promise<void> {
+  async runAllAnalytics(schoolId: string): Promise<void> {
+    if (!schoolId) return;
     console.log('🔍 بدء التحليلات الذكية...');
-    
+
     await Promise.all([
-      this.analyzeStudentPaymentStatus(),
-      this.analyzeStudentFailureRisk(),
-      this.analyzeEmployeeAttendancePattern(),
-      this.analyzeSalaryDelays(),
+      this.analyzeStudentPaymentStatus(schoolId),
+      this.analyzeStudentFailureRisk(schoolId),
+      this.analyzeEmployeeAttendancePattern(schoolId),
+      this.analyzeSalaryDelays(schoolId),
     ]);
 
     console.log('✅ انتهت التحليلات الذكية');
@@ -383,11 +401,13 @@ class SmartAlertsService {
   /**
    * الحصول على التنبيهات النشطة
    */
-  async getActiveAlerts(): Promise<SmartAlert[]> {
+  async getActiveAlerts(schoolId: string): Promise<SmartAlert[]> {
     try {
+      if (!schoolId) return [];
       const { data } = await supabase
         .from('smart_alerts')
         .select('*')
+        .eq('school_id', schoolId)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 

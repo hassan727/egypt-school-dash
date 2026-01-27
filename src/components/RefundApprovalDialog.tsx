@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { StudentService } from '@/services/studentService';
 import { getEgyptianDateString } from '@/utils/helpers';
 import type { Refund } from '@/types/student';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 interface RefundApprovalDialogProps {
     open: boolean;
@@ -29,6 +30,7 @@ export function RefundApprovalDialog({
     studentName = 'غير محدد',
     onApprovalComplete
 }: RefundApprovalDialogProps) {
+    const schoolId = useSystemSchoolId();
     const [loading, setLoading] = useState(false);
     const [approvalAction, setApprovalAction] = useState<'موافق عليه' | 'مرفوض' | null>(null);
     const [formData, setFormData] = useState({
@@ -48,8 +50,13 @@ export function RefundApprovalDialog({
         try {
             setLoading(true);
 
+            if (!schoolId) {
+                toast.error('لم يتم تحديد المدرسة');
+                return;
+            }
+
             // 1. تحديث حالة الاسترداد
-            await StudentService.updateRefundStatus(refund.id!, 'موافق عليه', {
+            await StudentService.updateRefundStatus(schoolId, refund.id!, 'موافق عليه', {
                 approverName: formData.approverName,
                 approvalDate: getEgyptianDateString(),
                 paymentMethod: formData.paymentMethod,
@@ -59,6 +66,7 @@ export function RefundApprovalDialog({
 
             // 2. تسجيل المعاملة المالية (الاسترداد)
             await StudentService.recordRefundTransaction(
+                schoolId,
                 refund.studentId,
                 refund.academicYearCode,
                 refund.finalRefundAmount || 0,
@@ -91,7 +99,12 @@ export function RefundApprovalDialog({
         try {
             setLoading(true);
 
-            await StudentService.updateRefundStatus(refund.id!, 'مرفوض', {
+            if (!schoolId) {
+                toast.error('لم يتم تحديد المدرسة');
+                return;
+            }
+
+            await StudentService.updateRefundStatus(schoolId, refund.id!, 'مرفوض', {
                 approverName: formData.approverName || 'النظام',
                 rejectionReason: formData.rejectionReason,
                 approvalDate: getEgyptianDateString()

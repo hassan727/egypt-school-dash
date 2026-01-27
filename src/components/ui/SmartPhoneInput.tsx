@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface SmartPhoneInputProps {
     id: string;
@@ -13,6 +14,32 @@ interface SmartPhoneInputProps {
     disabled?: boolean;
     error?: string;
 }
+
+// Country codes with names for dropdown
+const COUNTRY_CODES_LIST = [
+    { code: '+20', name: 'مصر', nationality: 'مصري' },
+    { code: '+966', name: 'السعودية', nationality: 'سعودي' },
+    { code: '+971', name: 'الإمارات', nationality: 'إماراتي' },
+    { code: '+965', name: 'الكويت', nationality: 'كويتي' },
+    { code: '+974', name: 'قطر', nationality: 'قطري' },
+    { code: '+973', name: 'البحرين', nationality: 'بحريني' },
+    { code: '+968', name: 'عمان', nationality: 'عماني' },
+    { code: '+967', name: 'اليمن', nationality: 'يمني' },
+    { code: '+962', name: 'الأردن', nationality: 'أردني' },
+    { code: '+961', name: 'لبنان', nationality: 'لبناني' },
+    { code: '+963', name: 'سوريا', nationality: 'سوري' },
+    { code: '+964', name: 'العراق', nationality: 'عراقي' },
+    { code: '+970', name: 'فلسطين', nationality: 'فلسطيني' },
+    { code: '+249', name: 'السودان', nationality: 'سوداني' },
+    { code: '+218', name: 'ليبيا', nationality: 'ليبي' },
+    { code: '+216', name: 'تونس', nationality: 'تونسي' },
+    { code: '+213', name: 'الجزائر', nationality: 'جزائري' },
+    { code: '+212', name: 'المغرب', nationality: 'مغربي' },
+    { code: '+222', name: 'موريتانيا', nationality: 'موريتاني' },
+    { code: '+252', name: 'الصومال', nationality: 'صومالي' },
+    { code: '+253', name: 'جيبوتي', nationality: 'جيبوتي' },
+    { code: '+269', name: 'جزر القمر', nationality: 'قمري' },
+];
 
 const COUNTRY_CODES: Record<string, string> = {
     'مصري': '+20',
@@ -37,8 +64,6 @@ const COUNTRY_CODES: Record<string, string> = {
     'صومالي': '+252',
     'جيبوتي': '+253',
     'قمري': '+269',
-    'أخرى': '',
-    // Default fallback
     'default': '+20'
 };
 
@@ -53,50 +78,99 @@ export function SmartPhoneInput({
     disabled = false,
     error
 }: SmartPhoneInputProps) {
-    // Detect country code based on nationality
-    const getCountryCode = (nat: string) => {
+    // Get default country code based on nationality
+    const getDefaultCountryCode = (nat: string) => {
         return COUNTRY_CODES[nat] || COUNTRY_CODES['default'];
     };
 
-    // Initialize logic
-    useEffect(() => {
-        // If value is empty and not disabled, verify if we should prepopulate
-        // Note: We generally don't want to overwrite existing data unless it's a fresh start
-        if (!value && !disabled) {
-            // Optional: could auto-set prefix here, but it might be annoying if user backspaces.
-            // Let's rely on the placeholder visual or just helper text.
-        }
-    }, [nationality, value, disabled]);
+    // Extract country code and phone number from combined value
+    const extractPhoneData = (fullValue: string): { code: string; number: string } => {
+        if (!fullValue) return { code: getDefaultCountryCode(nationality), number: '' };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let newValue = e.target.value;
-        onChange(newValue);
+        // Try to match country code at the start
+        const match = fullValue.match(/^(\+\d{1,4})(.*)/);
+        if (match) {
+            return { code: match[1], number: match[2] };
+        }
+
+        // No country code found, assume it's just the number
+        return { code: getDefaultCountryCode(nationality), number: fullValue };
     };
 
-    const countryCode = getCountryCode(nationality);
+    // State for selected country code and phone number (separated)
+    const [selectedCountryCode, setSelectedCountryCode] = useState<string>('');
+    const [phoneNumber, setPhoneNumber] = useState<string>('');
+
+    // Initialize and update when value or nationality changes
+    useEffect(() => {
+        const { code, number } = extractPhoneData(value);
+        setSelectedCountryCode(code);
+        setPhoneNumber(number);
+    }, [value, nationality]);
+
+    // Handle phone number input change
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newNumber = e.target.value;
+        setPhoneNumber(newNumber);
+
+        // Merge code with number and send to parent
+        onChange(selectedCountryCode + newNumber);
+    };
+
+    // Handle country code change
+    const handleCountryCodeChange = (newCode: string) => {
+        setSelectedCountryCode(newCode);
+
+        // Merge new code with existing number and send to parent
+        onChange(newCode + phoneNumber);
+    };
 
     return (
         <div className="space-y-2">
             <Label htmlFor={id} className="block text-sm font-medium text-gray-700">
                 {label} {required && <span className="text-red-600 font-bold">*</span>}
             </Label>
-            <div className="relative">
-                <Input
-                    id={id}
-                    dir="ltr" // Force LTR for phone numbers
-                    value={value}
-                    onChange={handleInputChange}
-                    placeholder={`${countryCode} 1xxxxxxxx`}
+
+            <div className="flex gap-2">
+                {/* Country Code Selector */}
+                <Select
+                    value={selectedCountryCode}
+                    onValueChange={handleCountryCodeChange}
                     disabled={disabled}
-                    className={`w-full p-3 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-left ${error ? 'border-red-500' : 'border-gray-300'}`}
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-500 text-sm bg-gray-50 rounded-r-md border-l px-2">
-                    {countryCode}
+                >
+                    <SelectTrigger className="w-40 bg-background">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {COUNTRY_CODES_LIST.map((country) => (
+                            <SelectItem key={country.code} value={country.code}>
+                                {country.code} {country.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                {/* Phone Number Input */}
+                <div className="flex-1">
+                    <Input
+                        id={id}
+                        dir="ltr"
+                        value={phoneNumber}
+                        onChange={handleInputChange}
+                        placeholder={placeholder || '1xxxxxxxx'}
+                        disabled={disabled}
+                        className={`w-full ${error ? 'border-red-500' : ''}`}
+                    />
                 </div>
             </div>
+
             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+
             <p className="text-xs text-gray-500 text-right">
-                سيتم استخدام الرمز الدولي ({countryCode}) تلقائياً بناءً على الجنسية ({nationality})
+                المفتاح الافتراضي بناءً على الجنسية: {getDefaultCountryCode(nationality)} ({nationality})
+                {selectedCountryCode !== getDefaultCountryCode(nationality) && (
+                    <span className="text-blue-600 font-medium"> • تم تغيير المفتاح يدوياً إلى {selectedCountryCode}</span>
+                )}
             </p>
         </div>
     );

@@ -6,15 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Save, X, AlertCircle, CheckCircle, UserPlus, User, Briefcase, Wallet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 // Import Reusable Forms
 import { PersonalDataForm, PersonalData } from "@/components/hr/employees/PersonalDataForm";
 import { JobDataForm, JobData } from "@/components/hr/employees/JobDataForm";
 import { FinancialDataForm, FinancialData } from "@/components/hr/employees/FinancialDataForm";
+import { ContactDataForm, ContactData } from "@/components/hr/employees/ContactDataForm";
 import { DocumentsSection, PendingDocument } from "@/components/hr/employees/DocumentsSection";
+import { EmployeeRoleSpecificFields, RoleSpecificData } from "@/components/hr/employees/EmployeeRoleSpecificFields";
 
 const HRNewEmployee = () => {
     const navigate = useNavigate();
+    const schoolId = useSystemSchoolId();
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // --- State Management ---
@@ -30,11 +34,15 @@ const HRNewEmployee = () => {
 
     const [jobData, setJobData] = useState<JobData>({
         job_title: "",
+        employee_role: "معلم",
         employee_type: "full_time",
         contract_type: "permanent",
         hire_date: new Date().toISOString().split('T')[0],
-        status: "active"
+        status: "active",
+        shift_id: ""
     });
+
+    const [roleSpecificData, setRoleSpecificData] = useState<RoleSpecificData>({});
 
     const [financialData, setFinancialData] = useState<FinancialData>({
         base_salary: 0,
@@ -50,6 +58,14 @@ const HRNewEmployee = () => {
         account_type: "جاري"
     });
 
+    const [contactData, setContactData] = useState<ContactData>({
+        phone: "",
+        whatsapp_number: "",
+        email: "",
+        address: "",
+        nationality: "مصري"
+    });
+
     const [documents, setDocuments] = useState<PendingDocument[]>([]);
 
     // --- Validation/Save Status ---
@@ -57,6 +73,7 @@ const HRNewEmployee = () => {
         personal: false,
         job: false,
         financial: false,
+        contact: false,
         documents: false
     });
 
@@ -77,6 +94,14 @@ const HRNewEmployee = () => {
 
     const handleJobChange = (field: keyof JobData, value: string) => {
         setJobData(prev => ({ ...prev, [field]: value }));
+        if (field === 'employee_role') {
+            setRoleSpecificData({});
+        }
+        setSectionStatus(prev => ({ ...prev, job: false }));
+    };
+
+    const handleRoleSpecificChange = (field: string, value: string | number) => {
+        setRoleSpecificData(prev => ({ ...prev, [field]: value }));
         setSectionStatus(prev => ({ ...prev, job: false }));
     };
 
@@ -103,6 +128,20 @@ const HRNewEmployee = () => {
         toast.success("تم حفظ البيانات المالية مبدئياً");
     };
 
+    const handleContactChange = (field: keyof ContactData, value: string) => {
+        setContactData(prev => ({ ...prev, [field]: value }));
+        setSectionStatus(prev => ({ ...prev, contact: false }));
+    };
+
+    const handleSaveContact = () => {
+        if (!contactData.phone) {
+            toast.error("رقم الهاتف مطلوب");
+            return;
+        }
+        setSectionStatus(prev => ({ ...prev, contact: true }));
+        toast.success("تم حفظ بيانات الاتصال مبدئياً");
+    };
+
     const handleDocumentsSave = (docs: PendingDocument[]) => {
         setDocuments(docs);
         // If docs exist, mark as 'saved' or at least acknowledged
@@ -116,13 +155,19 @@ const HRNewEmployee = () => {
     const handleSubmit = async () => {
         setIsSubmitting(true);
 
-        if (!sectionStatus.personal || !sectionStatus.job || !sectionStatus.financial) {
-            toast.error("يرجى مراجعة وحفظ جميع الأقسام (الشخصية، الوظيفية، المالية) أولاً");
+        if (!sectionStatus.personal || !sectionStatus.job || !sectionStatus.financial || !sectionStatus.contact) {
+            toast.error("يرجى مراجعة وحفظ جميع الأقسام (الشخصية، الوظيفية، المالية، الاتصال) أولاً");
             setIsSubmitting(false);
             return;
         }
 
         try {
+            if (!schoolId) {
+                toast.error("يرجى تحديث الصفحة، لم يتم التعرف على المدرسة");
+                setIsSubmitting(false);
+                return;
+            }
+
             // 1. Prepare JSONB Details
             const detailsPayload = {
                 financial_details: {
@@ -134,7 +179,8 @@ const HRNewEmployee = () => {
                     insurance_number: financialData.insurance_number,
                     iban: financialData.iban,
                     account_type: financialData.account_type
-                }
+                },
+                role_specific_fields: roleSpecificData
             };
 
             const empCode = `EMP-${Date.now().toString().slice(-6)}`;
@@ -154,16 +200,29 @@ const HRNewEmployee = () => {
 
                     // Job
                     position: jobData.job_title,
+                    employee_role: jobData.employee_role,
                     employee_type: jobData.employee_type,
                     contract_type: jobData.contract_type,
                     hire_date: jobData.hire_date,
                     status: jobData.status,
+                    shift_id: jobData.shift_id || null,
                     employee_id: empCode,
 
                     // Financial
                     base_salary: financialData.base_salary,
                     bank_name: financialData.bank_name,
                     bank_account: financialData.bank_account,
+
+                    // Contact
+                    phone: contactData.phone,
+                    phone_secondary: contactData.whatsapp_number,
+                    email: contactData.email,
+                    address: contactData.address,
+
+                    // Emergency Contact
+                    emergency_contact_name: contactData.emergency_contact_name || null,
+                    emergency_contact_relation: contactData.emergency_contact_relation || null,
+                    emergency_contact_phone: contactData.emergency_contact_phone || null,
 
                     // JSONB
                     details: detailsPayload
@@ -215,7 +274,7 @@ const HRNewEmployee = () => {
 
     return (
         <DashboardLayout>
-            <div className="space-y-8 max-w-6xl mx-auto py-6 px-4">
+            <div className="py-6 px-4">
                 {/* Header */}
                 <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
                     <div className="flex justify-between items-start mb-4">
@@ -240,100 +299,145 @@ const HRNewEmployee = () => {
                         <button onClick={() => document.getElementById('financial-data')?.scrollIntoView({ behavior: 'smooth' })} className="flex items-center gap-1 text-green-700 hover:bg-green-100 px-3 py-1 rounded transition">
                             💰 البيانات المالية
                         </button>
+                        <button onClick={() => document.getElementById('contact-data')?.scrollIntoView({ behavior: 'smooth' })} className="flex items-center gap-1 text-red-700 hover:bg-red-100 px-3 py-1 rounded transition">
+                            📞 الاتصال
+                        </button>
                         <button onClick={() => document.getElementById('documents-data')?.scrollIntoView({ behavior: 'smooth' })} className="flex items-center gap-1 text-orange-700 hover:bg-orange-100 px-3 py-1 rounded transition">
                             📂 المستندات
                         </button>
                     </div>
                 </div>
 
-                {/* Section 1: Personal Data */}
-                <div id="personal-data" className="scroll-mt-24">
-                    <Card className="border-blue-100 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-1 h-full bg-blue-500" />
-                        <CardHeader className="bg-blue-50/30 pb-4">
-                            <CardTitle className="flex items-center gap-2 text-xl text-blue-800">
-                                <User className="h-5 w-5" />
-                                البيانات الشخصية
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                            <PersonalDataForm data={personalData} onChange={handlePersonalChange} />
-                            <div className="flex justify-end border-t pt-4 mt-4">
-                                {sectionStatus.personal ? (
-                                    <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
-                                        <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
-                                    </Button>
-                                ) : (
-                                    <Button onClick={handleSavePersonal} className="bg-blue-600 hover:bg-blue-700">
-                                        <Save className="w-4 h-4 ml-2" /> حفظ البيانات الشخصية
-                                    </Button>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                {/* Sections Grid: 2 Columns */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Section 1: Personal Data */}
+                    <div id="personal-data" className="scroll-mt-24">
+                        <Card className="border-blue-100 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-1 h-full bg-blue-500" />
+                            <CardHeader className="bg-blue-50/30 pb-4">
+                                <CardTitle className="flex items-center gap-2 text-xl text-blue-800">
+                                    <User className="h-5 w-5" />
+                                    البيانات الشخصية
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <PersonalDataForm data={personalData} onChange={handlePersonalChange} />
+                                <div className="flex justify-end border-t pt-4 mt-4">
+                                    {sectionStatus.personal ? (
+                                        <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
+                                            <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={handleSavePersonal} className="bg-blue-600 hover:bg-blue-700">
+                                            <Save className="w-4 h-4 ml-2" /> حفظ البيانات الشخصية
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                {/* Section 2: Job Data */}
-                <div id="job-data" className="scroll-mt-24">
-                    <Card className="border-purple-100 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-1 h-full bg-purple-500" />
-                        <CardHeader className="bg-purple-50/30 pb-4">
-                            <CardTitle className="flex items-center gap-2 text-xl text-purple-800">
-                                <Briefcase className="h-5 w-5" />
-                                البيانات الوظيفية
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                            <JobDataForm data={jobData} onChange={handleJobChange} />
-                            <div className="flex justify-end border-t pt-4 mt-4">
-                                {sectionStatus.job ? (
-                                    <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
-                                        <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
-                                    </Button>
-                                ) : (
-                                    <Button onClick={handleSaveJob} className="bg-purple-600 hover:bg-purple-700">
-                                        <Save className="w-4 h-4 ml-2" /> حفظ البيانات الوظيفية
-                                    </Button>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                    {/* Section 2: Job Data */}
+                    <div id="job-data" className="scroll-mt-24">
+                        <Card className="border-purple-100 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-1 h-full bg-purple-500" />
+                            <CardHeader className="bg-purple-50/30 pb-4">
+                                <CardTitle className="flex items-center gap-2 text-xl text-purple-800">
+                                    <Briefcase className="h-5 w-5" />
+                                    البيانات الوظيفية
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <JobDataForm data={jobData} onChange={handleJobChange} />
+                                <div className="mt-6 pt-6 border-t">
+                                    <EmployeeRoleSpecificFields
+                                        employeeRole={jobData.employee_role}
+                                        data={roleSpecificData}
+                                        onChange={handleRoleSpecificChange}
+                                    />
+                                </div>
+                                <div className="flex justify-end border-t pt-4 mt-4">
+                                    {sectionStatus.job ? (
+                                        <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
+                                            <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={handleSaveJob} className="bg-purple-600 hover:bg-purple-700">
+                                            <Save className="w-4 h-4 ml-2" /> حفظ البيانات الوظيفية
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                {/* Section 3: Financial Data */}
-                <div id="financial-data" className="scroll-mt-24">
-                    <Card className="border-green-100 shadow-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-1 h-full bg-green-500" />
-                        <CardHeader className="bg-green-50/30 pb-4">
-                            <CardTitle className="flex items-center gap-2 text-xl text-green-800">
-                                <Wallet className="h-5 w-5" />
-                                البيانات المالية
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-6">
-                            <FinancialDataForm
-                                data={financialData}
-                                onChange={handleFinancialChange}
-                                isReadOnly={false}
-                            />
-                            <div className="flex justify-end border-t pt-4 mt-4">
-                                {sectionStatus.financial ? (
-                                    <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
-                                        <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
-                                    </Button>
-                                ) : (
-                                    <Button onClick={handleSaveFinancial} className="bg-green-600 hover:bg-green-700">
-                                        <Save className="w-4 h-4 ml-2" /> حفظ البيانات المالية
-                                    </Button>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                    {/* Section 3: Financial Data */}
+                    <div id="financial-data" className="scroll-mt-24">
+                        <Card className="border-green-100 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-1 h-full bg-green-500" />
+                            <CardHeader className="bg-green-50/30 pb-4">
+                                <CardTitle className="flex items-center gap-2 text-xl text-green-800">
+                                    <Wallet className="h-5 w-5" />
+                                    البيانات المالية
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <FinancialDataForm
+                                    data={financialData}
+                                    onChange={handleFinancialChange}
+                                    isReadOnly={false}
+                                />
+                                <div className="flex justify-end border-t pt-4 mt-4">
+                                    {sectionStatus.financial ? (
+                                        <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
+                                            <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={handleSaveFinancial} className="bg-green-600 hover:bg-green-700">
+                                            <Save className="w-4 h-4 ml-2" /> حفظ البيانات المالية
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                {/* Section 4: Documents */}
-                <div id="documents-data" className="scroll-mt-24">
-                    <DocumentsSection data={documents} onSave={handleDocumentsSave} />
+                    {/* Section 4: Contact Data */}
+                    <div id="contact-data" className="scroll-mt-24">
+                        <Card className="border-red-100 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-1 h-full bg-red-500" />
+                            <CardHeader className="bg-red-50/30 pb-4">
+                                <CardTitle className="flex items-center gap-2 text-xl text-red-800">
+                                    📞 بيانات الاتصال
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-6">
+                                <ContactDataForm
+                                    data={{
+                                        ...contactData,
+                                        nationality: personalData.nationality
+                                    }}
+                                    onChange={handleContactChange}
+                                />
+                                <div className="flex justify-end border-t pt-4 mt-4">
+                                    {sectionStatus.contact ? (
+                                        <Button variant="ghost" className="text-green-600 pointer-events-none hover:bg-green-50">
+                                            <CheckCircle className="w-4 h-4 ml-2" /> تم الحفظ
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={handleSaveContact} className="bg-red-600 hover:bg-red-700">
+                                            <Save className="w-4 h-4 ml-2" /> حفظ بيانات الاتصال
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Section 5: Documents */}
+                    <div id="documents-data" className="scroll-mt-24 md:col-span-2">
+                        <DocumentsSection data={documents} onSave={handleDocumentsSave} />
+                    </div>
                 </div>
 
                 {/* Submision Footer */}

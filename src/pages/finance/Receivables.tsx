@@ -55,6 +55,7 @@ import { useGlobalFilter } from '@/context/GlobalFilterContext';
 import { useFinanceData } from '@/hooks/useFinanceData';
 import { useReceivablesAnalytics } from '@/hooks/useReceivablesAnalytics';
 import { FinanceNavigation } from '@/components/finance/FinanceNavigation';
+import { useSystemSchoolId } from '@/context/SystemContext';
 import { InstallmentTimeline } from '@/components/finance/InstallmentTimeline';
 import { GuardianWhatsAppDialog, formatPhoneNumber } from '@/components/GuardianWhatsAppDialog';
 import { toast } from 'sonner';
@@ -93,12 +94,18 @@ const Receivables = () => {
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'analytics'>('list');
 
   const { selectedYear: academicYear } = useGlobalFilter();
+  const schoolId = useSystemSchoolId();
   const { summary, refreshData } = useFinanceData();
 
   // جلب بيانات المستحقات
   useEffect(() => {
     const fetchReceivables = async () => {
       setLoading(true);
+      if (!schoolId) {
+        setLoading(false);
+        return;
+      }
+
       try {
         // جلب رسوم الطلاب
         const { data: fees, error: feesError } = await supabase
@@ -119,7 +126,8 @@ const Receivables = () => {
               guardian_nationality
             )
           `)
-          .eq('academic_year_code', academicYear);
+          .eq('academic_year_code', academicYear)
+          .eq('school_id', schoolId); // Enforce School Identity
 
         if (feesError) throw feesError;
 
@@ -127,6 +135,7 @@ const Receivables = () => {
         const { data: transactions, error: transactionsError } = await supabase
           .from('financial_transactions')
           .select('student_id, amount, transaction_date, transaction_type')
+          .eq('school_id', schoolId) // Enforce School Identity
           .eq('academic_year_code', academicYear)
           .in('transaction_type', ['دفعة', 'خصم']);
 
@@ -134,10 +143,15 @@ const Receivables = () => {
 
         // جلب الأقساط
         const feeIds = (fees || []).map(f => f.id);
-        const { data: installments } = await supabase
-          .from('fee_installments')
-          .select('*')
-          .in('fee_id', feeIds);
+
+        let installments: any[] = [];
+        if (feeIds.length > 0) {
+          const { data } = await supabase
+            .from('fee_installments')
+            .select('*')
+            .in('fee_id', feeIds);
+          installments = data || [];
+        }
 
         setInstallmentsData(installments || []);
 
@@ -227,7 +241,7 @@ const Receivables = () => {
     };
 
     fetchReceivables();
-  }, [academicYear]);
+  }, [academicYear, schoolId]);
 
   // Analytics hook
   const analytics = useReceivablesAnalytics({

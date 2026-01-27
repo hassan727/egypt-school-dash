@@ -102,6 +102,7 @@ import AcademicSearchPage from "./pages/students/AcademicSearchPage";
 import StagesClasses from "./pages/settings/StagesClasses";
 import SchoolsManagementPage from "./pages/settings/SchoolsManagementPage";
 import UsersManagementPage from "./pages/settings/UsersManagementPage";
+import SchoolControl from "./pages/SchoolControl";
 
 // Student Settings & Auth
 import StudentAccountsPage from "./pages/students/settings/StudentAccountsPage";
@@ -114,6 +115,12 @@ import AdminLoginPage from "./pages/auth/AdminLoginPage";
 // Auth Context & Components
 import { AuthProvider } from "@/context/AuthContext";
 import { DemoModeBanner } from "@/components/auth/DemoModeBanner";
+
+// System Context - Central Control
+import { SystemProvider } from "@/context/SystemContext";
+import { IdentityGuard } from "@/components/IdentityGuard";
+import { IdentityBar } from "@/components/IdentityBar";
+import ControlRoom from "./pages/ControlRoom";
 
 // HR - Human Resources System
 import HREmployeesList from "./pages/hr/employees/HREmployeesList";
@@ -132,8 +139,7 @@ import AttendanceSettings from "./pages/hr/attendance/AttendanceSettings";
 import HRCalendarPage from "./pages/hr/HRCalendarPage";
 import HRLeaves from "./pages/hr/leaves/HRLeaves";
 import HRLeaveApprovals from "./pages/hr/leaves/HRLeaveApprovals";
-import HRSchedules from "./pages/hr/schedules/HRSchedules";
-import HRSubstitution from "./pages/hr/schedules/HRSubstitution";
+
 import HRPayroll from "./pages/hr/payroll/HRPayroll";
 import HRPayrollExport from "./pages/hr/payroll/HRPayrollExport";
 import HRContracts from "./pages/hr/contracts/HRContracts";
@@ -166,163 +172,177 @@ const App = () => (
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <GlobalFilterProvider>
-            <DemoModeBanner />
-            <BrowserRouter future={{ v7_relativeSplatPath: true }}>
-              <Routes>
-                <Route path="/" element={<Index />} />
+          <SystemProvider>
+            <GlobalFilterProvider>
+              <DemoModeBanner />
+              <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+                <IdentityGuard>
+                  <IdentityBar />
+                  <Routes>
+                    {/* Control Room - Central Identity Setup */}
+                    <Route path="/control-room" element={<ControlRoom />} />
 
-                {/* Students Routes - Updated to align with correction document */}
-                <Route path="/students" element={<SystemDashboard />} />
-                <Route path="/students/list" element={<StudentsList />} />
-                {/* DISABLED: /students/new - Replaced by multi-page system (BasicDataPage, FinancialManagementPage, etc.) */}
-                {/* <Route path="/students/new" element={<NewStudent />} /> */}
-                <Route path="/students/create" element={<CreateStudentPage />} />
-                {/* Advanced Features Routes - Moved up to prevent conflict with :studentId */}
-                <Route path="/students/batch" element={<BatchOperationsLayout />}>
-                  <Route path="operations" element={<BatchOperationsPage />} />
-                  <Route path="academic" element={<BatchAcademicPage />} />
-                  <Route path="attendance" element={<BatchAttendancePage />} />
-                  <Route path="notifications" element={<BatchNotificationsPage />} />
-                  <Route path="profiles" element={<BatchProfilesPage />} />
-                  <Route path="archive" element={<BatchArchivePage />} />
-                </Route>
-                <Route path="/students/data-portability" element={<DataPortabilityPage />} />
-                <Route path="/students/advanced-search" element={<AdvancedSearchPage />} />
-                <Route path="/students/system-dashboard" element={<SystemDashboard />} />
-                <Route path="/students/reports" element={<ReportsPage />} />
+                    <Route path="/" element={<Index />} />
 
-                <Route path="/students/attendance" element={<StudentsAttendance />} />
-                <Route path="/students/certificates" element={<Certificates />} />
+                    {/* Students Routes - Updated to align with correction document */}
+                    <Route path="/students" element={<SystemDashboard />} />
+                    <Route path="/students/list" element={<StudentsList />} />
+                    {/* DISABLED: /students/new - Replaced by multi-page system (BasicDataPage, FinancialManagementPage, etc.) */}
+                    {/* <Route path="/students/new" element={<NewStudent />} /> */}
+                    <Route path="/students/create" element={<CreateStudentPage />} />
 
-                {/* Redirect legacy /students/:id to new /student/:id/dashboard */}
-                <Route path="/students/:studentId" element={<StudentRedirect />} />
+                    {/* Advanced Features Routes - Moved up to prevent conflict with :studentId */}
+                    <Route path="/students/batch" element={<BatchOperationsLayout />}>
+                      <Route path="operations" element={<BatchOperationsPage />} />
+                      <Route path="academic" element={<BatchAcademicPage />} />
+                      <Route path="attendance" element={<BatchAttendancePage />} />
+                      <Route path="notifications" element={<BatchNotificationsPage />} />
+                      <Route path="profiles" element={<BatchProfilesPage />} />
+                      <Route path="archive" element={<BatchArchivePage />} />
+                    </Route>
+                    <Route path="/students/data-portability" element={<DataPortabilityPage />} />
+                    <Route path="/students/advanced-search" element={<AdvancedSearchPage />} />
+                    <Route path="/students/system-dashboard" element={<SystemDashboard />} />
+                    <Route path="/students/reports" element={<ReportsPage />} />
 
-                {/* New Dashboard and Specialized Pages */}
-                <Route path="/student/:studentId/dashboard" element={<StudentDashboard />} />
-                <Route path="/students/:studentId/complete-profile" element={<CompleteProfilePage />} />
-                <Route path="/print/application-form/:studentId" element={<ApplicationFormPrint />} />
-                <Route path="/student/:studentId/basic-data" element={<BasicDataPage />} />
-                <Route path="/student/:studentId/financial-management" element={<FinancialManagementPage />} />
-                <Route path="/student/:studentId/refund-request" element={<RefundRequestPage />} />
-                <Route path="/student/:studentId/refund-processing" element={<RefundProcessingPage />} />
-                <Route path="/student/:studentId/academic-management" element={<AcademicManagementPage />} />
-                <Route path="/student/:studentId/attendance-management" element={<AttendanceManagementPage />} />
-                <Route path="/student/:studentId/behavioral-dashboard" element={<BehavioralDashboard />} />
-                <Route path="/student/:studentId/behavioral-report/:reportType" element={<BehavioralReportPage />} />
-                <Route path="/student/:studentId/behavioral-report/:reportType/:reportId" element={<BehavioralReportPage />} />
-                <Route path="/student/:studentId/log" element={<LogPage />} />
-                <Route path="/student/:studentId/notifications" element={<StudentNotificationsPage />} />
+                    <Route path="/students/attendance" element={<StudentsAttendance />} />
+                    <Route path="/students/certificates" element={<Certificates />} />
 
-                {/* Student History Routes */}
-                <Route path="/students/:studentId/history" element={<StudentHistory />} />
-                <Route path="/students/:studentId/history/personal-data" element={<PersonalDataHistory />} />
-                <Route path="/students/:studentId/history/enrollment-data" element={<EnrollmentHistory />} />
-                <Route path="/students/:studentId/history/guardian-data" element={<GuardianHistory />} />
-                <Route path="/students/:studentId/history/mother-data" element={<MotherHistory />} />
-                <Route path="/students/:studentId/history/emergency-contacts" element={<EmergencyHistory />} />
-                <Route path="/students/:studentId/history/academic-records" element={<AcademicHistory />} />
-                <Route path="/students/:studentId/history/behavioral-records" element={<BehavioralHistory />} />
-                <Route path="/students/:studentId/history/financial-records" element={<FinancialHistory />} />
+                    {/* Redirect legacy /students/:id to new /student/:id/dashboard */}
+                    <Route path="/students/:studentId" element={<StudentRedirect />} />
 
-                {/* Teachers Routes */}
-                <Route path="/teachers" element={<TeachersList />} />
-                <Route path="/teachers/new" element={<NewTeacher />} />
-                <Route path="/teachers/attendance" element={<TeachersAttendance />} />
-                <Route path="/teachers/evaluation" element={<TeachersEvaluation />} />
+                    {/* New Dashboard and Specialized Pages */}
+                    <Route path="/student/:studentId/dashboard" element={<StudentDashboard />} />
+                    <Route path="/students/:studentId/complete-profile" element={<CompleteProfilePage />} />
+                    <Route path="/print/application-form/:studentId" element={<ApplicationFormPrint />} />
+                    <Route path="/student/:studentId/basic-data" element={<BasicDataPage />} />
+                    <Route path="/student/:studentId/financial-management" element={<FinancialManagementPage />} />
+                    <Route path="/student/:studentId/refund-request" element={<RefundRequestPage />} />
+                    <Route path="/student/:studentId/refund-processing" element={<RefundProcessingPage />} />
+                    <Route path="/student/:studentId/academic-management" element={<AcademicManagementPage />} />
+                    <Route path="/student/:studentId/attendance-management" element={<AttendanceManagementPage />} />
+                    <Route path="/student/:studentId/behavioral-dashboard" element={<BehavioralDashboard />} />
+                    <Route path="/student/:studentId/behavioral-report/:reportType" element={<BehavioralReportPage />} />
+                    <Route path="/student/:studentId/behavioral-report/:reportType/:reportId" element={<BehavioralReportPage />} />
+                    <Route path="/student/:studentId/log" element={<LogPage />} />
+                    <Route path="/student/:studentId/notifications" element={<StudentNotificationsPage />} />
 
-                {/* Teacher Profile Routes */}
-                <Route path="/teacher/:teacherId/dashboard" element={<TeacherProfileDashboard />} />
-                <Route path="/teacher/:teacherId/basic-data" element={<TeacherBasicDataPage />} />
-                <Route path="/teacher/:teacherId/financial" element={<TeacherFinancialPage />} />
-                <Route path="/teacher/:teacherId/professional" element={<TeacherProfessionalPage />} />
-                <Route path="/teacher/:teacherId/evaluations" element={<TeacherEvaluationsPage />} />
-                <Route path="/teacher/:teacherId/attendance" element={<TeacherAttendancePage />} />
-                <Route path="/teacher/:teacherId/notifications" element={<TeacherNotificationsPage />} />
-                <Route path="/teacher/:teacherId/log" element={<TeacherLogPage />} />
+                    {/* Student History Routes */}
+                    <Route path="/students/:studentId/history" element={<StudentHistory />} />
+                    <Route path="/students/:studentId/history/personal-data" element={<PersonalDataHistory />} />
+                    <Route path="/students/:studentId/history/enrollment-data" element={<EnrollmentHistory />} />
+                    <Route path="/students/:studentId/history/guardian-data" element={<GuardianHistory />} />
+                    <Route path="/students/:studentId/history/mother-data" element={<MotherHistory />} />
+                    <Route path="/students/:studentId/history/emergency-contacts" element={<EmergencyHistory />} />
+                    <Route path="/students/:studentId/history/academic-records" element={<AcademicHistory />} />
+                    <Route path="/students/:studentId/history/behavioral-records" element={<BehavioralHistory />} />
+                    <Route path="/students/:studentId/history/financial-records" element={<FinancialHistory />} />
+
+                    {/* Teachers Routes */}
+                    <Route path="/teachers" element={<TeachersList />} />
+                    <Route path="/teachers/new" element={<NewTeacher />} />
+                    <Route path="/teachers/attendance" element={<TeachersAttendance />} />
+                    <Route path="/teachers/evaluation" element={<TeachersEvaluation />} />
+
+                    {/* School Control System */}
+                    <Route path="/school-control" element={<SchoolControl />} />
+
+                    {/* Teacher Profile Routes */}
+                    <Route path="/teacher/:teacherId/dashboard" element={<TeacherProfileDashboard />} />
+                    <Route path="/teacher/:teacherId/basic-data" element={<TeacherBasicDataPage />} />
+                    <Route path="/teacher/:teacherId/financial" element={<TeacherFinancialPage />} />
+                    <Route path="/teacher/:teacherId/professional" element={<TeacherProfessionalPage />} />
+                    <Route path="/teacher/:teacherId/evaluations" element={<TeacherEvaluationsPage />} />
+                    <Route path="/teacher/:teacherId/attendance" element={<TeacherAttendancePage />} />
+                    <Route path="/teacher/:teacherId/notifications" element={<TeacherNotificationsPage />} />
+                    <Route path="/teacher/:teacherId/log" element={<TeacherLogPage />} />
 
 
-                {/* Finance Routes */}
-                <Route path="/finance" element={<FinanceDashboard />} />
-                <Route path="/finance/dashboard" element={<FinanceDashboard />} />
-                <Route path="/finance/revenue" element={<Revenue />} />
-                <Route path="/finance/expenses" element={<Expenses />} />
-                <Route path="/finance/salaries" element={<Salaries />} />
-                <Route path="/finance/receivables" element={<Receivables />} />
-                <Route path="/finance/profits" element={<Profits />} />
-                <Route path="/finance/base-salaries" element={<BaseSalaries />} />
-                <Route path="/finance/bonuses" element={<Bonuses />} />
-                <Route path="/finance/deductions" element={<Deductions />} />
-                <Route path="/finance/net-payroll" element={<NetPayroll />} />
+                    {/* Finance Routes */}
+                    <Route path="/finance" element={<FinanceDashboard />} />
+                    <Route path="/finance/dashboard" element={<FinanceDashboard />} />
+                    <Route path="/finance/revenue" element={<Revenue />} />
+                    <Route path="/finance/expenses" element={<Expenses />} />
+                    <Route path="/finance/salaries" element={<Salaries />} />
+                    <Route path="/finance/receivables" element={<Receivables />} />
+                    <Route path="/finance/profits" element={<Profits />} />
+                    <Route path="/finance/base-salaries" element={<BaseSalaries />} />
+                    <Route path="/finance/bonuses" element={<Bonuses />} />
+                    <Route path="/finance/deductions" element={<Deductions />} />
+                    <Route path="/finance/net-payroll" element={<NetPayroll />} />
 
-                {/* Classes Routes */}
-                <Route path="/classes" element={<ClassesList />} />
+                    {/* Classes Routes */}
+                    <Route path="/classes" element={<ClassesList />} />
 
-                {/* Academic Search Route */}
-                <Route path="/academic/search" element={<AcademicSearchPage />} />
+                    {/* Schedules Routes - Moved from HR */}
 
-                {/* Test Routes */}
-                <Route path="/test/academic-hierarchy" element={<AcademicTestPage />} />
 
-                {/* HR - Human Resources Routes */}
-                <Route path="/hr/employees" element={<HREmployeesList />} />
-                <Route path="/hr/employees/new" element={<HRNewEmployee />} />
-                <Route path="/hr/employees/terminated" element={<HRTerminatedEmployees />} />
-                <Route path="/hr/employees/:employeeId" element={<HREmployeeProfile />} />
-                <Route path="/hr/employees/:employeeId/documents" element={<EmployeeDocumentsPage />} />
-                <Route path="/hr/employees/:employeeId/financial" element={<EmployeeFinancialPage />} />
-                <Route path="/hr/employees/:employeeId/job" element={<EmployeeJobPage />} />
-                <Route path="/hr/employees/:employeeId/history" element={<EmployeeHistoryPage />} />
-                <Route path="/hr/attendance" element={<HRDailyAttendance />} />
-                <Route path="/hr/attendance/shifts" element={<HRShifts />} />
-                <Route path="/hr/attendance/reports" element={<HRAttendanceReports />} />
-                <Route path="/hr/attendance/mobile" element={<MobileCheckIn />} />
-                <Route path="/hr/attendance/qr" element={<HRQRCodeManagement />} />
-                <Route path="/hr/attendance/settings" element={<AttendanceSettings />} />
-                <Route path="/hr/calendar" element={<HRCalendarPage />} />
-                <Route path="/hr/leaves" element={<HRLeaves />} />
-                <Route path="/hr/leaves/approvals" element={<HRLeaveApprovals />} />
-                <Route path="/hr/schedules" element={<HRSchedules />} />
-                <Route path="/hr/schedules/substitution" element={<HRSubstitution />} />
-                <Route path="/hr/payroll" element={<HRPayroll />} />
-                <Route path="/hr/payroll/export" element={<HRPayrollExport />} />
-                <Route path="/hr/contracts" element={<HRContracts />} />
-                <Route path="/hr/performance" element={<HRPerformance />} />
-                <Route path="/hr/training" element={<HRTraining />} />
-                <Route path="/hr/violations" element={<HRViolations />} />
-                <Route path="/hr/offboarding" element={<HROffboarding />} />
-                <Route path="/hr/reports" element={<HRReports />} />
-                <Route path="/hr/settings" element={<HRSettings />} />
+                    {/* Academic Search Route */}
+                    <Route path="/academic/search" element={<AcademicSearchPage />} />
 
-                {/* Student Settings Routes */}
-                <Route path="/students/settings/data" element={<StudentDataManagementPage />} />
-                <Route path="/students/settings/accounts" element={<StudentAccountsPage />} />
-                <Route path="/students/settings/import" element={<StudentImportPage />} />
+                    {/* Test Routes */}
+                    <Route path="/test/academic-hierarchy" element={<AcademicTestPage />} />
 
-                {/* Student Portal Routes (Public) */}
-                <Route path="/student/login" element={<StudentLoginPage />} />
-                <Route path="/student/dashboard" element={<StudentPortalDashboard />} />
+                    {/* HR - Human Resources Routes */}
+                    <Route path="/hr/employees" element={<HREmployeesList />} />
+                    <Route path="/hr/employees/new" element={<HRNewEmployee />} />
+                    <Route path="/hr/employees/terminated" element={<HRTerminatedEmployees />} />
+                    <Route path="/hr/employees/:employeeId" element={<HREmployeeProfile />} />
+                    <Route path="/hr/employees/:employeeId/documents" element={<EmployeeDocumentsPage />} />
+                    <Route path="/hr/employees/:employeeId/financial" element={<EmployeeFinancialPage />} />
+                    <Route path="/hr/employees/:employeeId/job" element={<EmployeeJobPage />} />
+                    <Route path="/hr/employees/:employeeId/history" element={<EmployeeHistoryPage />} />
+                    <Route path="/hr/attendance" element={<HRDailyAttendance />} />
+                    <Route path="/hr/attendance/shifts" element={<HRShifts />} />
+                    <Route path="/hr/attendance/reports" element={<HRAttendanceReports />} />
+                    <Route path="/hr/attendance/mobile" element={<MobileCheckIn />} />
+                    <Route path="/hr/attendance/qr" element={<HRQRCodeManagement />} />
+                    <Route path="/hr/attendance/settings" element={<AttendanceSettings />} />
+                    <Route path="/hr/calendar" element={<HRCalendarPage />} />
+                    <Route path="/hr/leaves" element={<HRLeaves />} />
+                    <Route path="/hr/leaves/approvals" element={<HRLeaveApprovals />} />
 
-                {/* Admin Login */}
-                <Route path="/login" element={<AdminLoginPage />} />
+                    <Route path="/hr/payroll" element={<HRPayroll />} />
+                    <Route path="/hr/payroll/export" element={<HRPayrollExport />} />
+                    <Route path="/hr/contracts" element={<HRContracts />} />
+                    <Route path="/hr/performance" element={<HRPerformance />} />
+                    <Route path="/hr/training" element={<HRTraining />} />
+                    <Route path="/hr/violations" element={<HRViolations />} />
+                    <Route path="/hr/offboarding" element={<HROffboarding />} />
+                    <Route path="/hr/reports" element={<HRReports />} />
+                    <Route path="/hr/settings" element={<HRSettings />} />
 
-                {/* Settings Routes */}
-                <Route path="/settings/stages-classes" element={<StagesClasses />} />
-                <Route path="/settings/schools" element={<SchoolsManagementPage />} />
-                <Route path="/settings/users" element={<UsersManagementPage />} />
+                    {/* Student Settings Routes */}
+                    <Route path="/students/settings/data" element={<StudentDataManagementPage />} />
+                    <Route path="/students/settings/accounts" element={<StudentAccountsPage />} />
+                    <Route path="/students/settings/import" element={<StudentImportPage />} />
 
-                {/* Admin Monitoring & Intelligence Routes */}
-                <Route path="/admin/error-monitoring" element={<ErrorMonitoringDashboard />} />
+                    {/* Student Portal Routes (Public) */}
+                    <Route path="/student/login" element={<StudentLoginPage />} />
+                    <Route path="/student/dashboard" element={<StudentPortalDashboard />} />
 
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </GlobalFilterProvider>
+                    {/* Admin Login */}
+                    <Route path="/login" element={<AdminLoginPage />} />
+
+                    {/* Settings Routes */}
+                    <Route path="/settings/stages-classes" element={<StagesClasses />} />
+                    <Route path="/settings/schools" element={<SchoolsManagementPage />} />
+                    <Route path="/settings/users" element={<UsersManagementPage />} />
+
+                    {/* Admin Monitoring & Intelligence Routes */}
+                    <Route path="/admin/error-monitoring" element={<ErrorMonitoringDashboard />} />
+
+                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </IdentityGuard>
+              </BrowserRouter>
+            </GlobalFilterProvider>
+          </SystemProvider>
         </AuthProvider>
       </TooltipProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
+    </QueryClientProvider >
+  </ErrorBoundary >
 );
 
 export default App;

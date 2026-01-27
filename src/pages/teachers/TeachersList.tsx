@@ -27,6 +27,7 @@ import { TeacherListItem } from '@/types/teacher';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 const TeachersList = () => {
   const [teachers, setTeachers] = useState<TeacherListItem[]>([]);
@@ -35,32 +36,42 @@ const TeachersList = () => {
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const schoolId = useSystemSchoolId();
 
   useEffect(() => {
-    fetchTeachers();
-  }, []);
+    if (schoolId) {
+      fetchTeachers();
+    }
+  }, [schoolId]);
 
   const fetchTeachers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('teachers')
+      let query = supabase
+        .from('employees')
         .select('*')
-        .order('full_name_ar', { ascending: true });
+        .eq('employee_type', 'معلم')
+        .order('full_name', { ascending: true });
+
+      if (schoolId) {
+        query = query.eq('school_id', schoolId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
       const formattedTeachers: TeacherListItem[] = (data || []).map((t: any) => ({
-        teacherId: t.teacher_id,
-        fullNameAr: t.full_name_ar,
+        teacherId: t.employee_id,
+        fullNameAr: t.full_name,
         phone: t.phone,
         email: t.email,
         department: t.department,
-        jobTitle: t.job_title,
-        specialization: t.specialization,
-        employmentStatus: t.employment_status,
+        jobTitle: t.position || 'معلم',
+        specialization: t.details?.specialization || '',
+        employmentStatus: t.is_active ? 'نشط' : 'غير نشط',
         hireDate: t.hire_date,
-        profileLink: `/teacher/${t.teacher_id}/dashboard`
+        profileLink: `/teacher/${t.employee_id}/dashboard`
       }));
 
       setTeachers(formattedTeachers);
@@ -137,9 +148,9 @@ const TeachersList = () => {
     try {
       setIsDeleting(true);
       const { error } = await supabase
-        .from('teachers')
+        .from('employees')
         .delete()
-        .in('teacher_id', Array.from(selectedTeacherIds));
+        .in('employee_id', Array.from(selectedTeacherIds));
 
       if (error) throw error;
 
@@ -321,8 +332,8 @@ const TeachersList = () => {
                         </td>
                         <td className="px-4 py-3 border border-gray-200">
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${teacher.employmentStatus === 'نشط' ? 'bg-green-100 text-green-800 border border-green-200' :
-                              teacher.employmentStatus === 'إجازة' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                                'bg-red-100 text-red-800 border border-red-200'
+                            teacher.employmentStatus === 'إجازة' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                              'bg-red-100 text-red-800 border border-red-200'
                             }`}>
                             {teacher.employmentStatus}
                           </span>
@@ -351,9 +362,9 @@ const TeachersList = () => {
                                 if (window.confirm('هل أنت متأكد من الحذف؟')) {
                                   try {
                                     const { error } = await supabase
-                                      .from('teachers')
+                                      .from('employees')
                                       .delete()
-                                      .eq('teacher_id', teacher.teacherId);
+                                      .eq('employee_id', teacher.teacherId);
                                     if (error) throw error;
                                     toast.success('تم حذف المعلم بنجاح');
                                     fetchTeachers();

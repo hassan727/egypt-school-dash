@@ -15,8 +15,11 @@ import {
 import { QRCodeScanner } from '@/components/hr/QRCodeScanner';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { attendanceService } from '@/services/attendanceService';
+import { useSystemSchoolId } from '@/context/SystemContext';
 
 const MobileCheckIn = () => {
+    const schoolId = useSystemSchoolId();
     const [employeeCode, setEmployeeCode] = useState('');
     const [employee, setEmployee] = useState<any>(null);
     const [todayRecord, setTodayRecord] = useState<any>(null);
@@ -27,7 +30,7 @@ const MobileCheckIn = () => {
 
     // Fetch employee and today's record
     const fetchEmployeeData = async () => {
-        if (!employeeCode.trim()) return;
+        if (!employeeCode.trim() || !schoolId) return;
 
         setLoading(true);
         try {
@@ -36,6 +39,7 @@ const MobileCheckIn = () => {
                 .from('employees')
                 .select('*')
                 .eq('employee_id', employeeCode.trim())
+                .eq('school_id', schoolId)
                 .eq('is_active', true)
                 .single();
 
@@ -91,31 +95,72 @@ const MobileCheckIn = () => {
 
         setLoading(true);
         try {
+            // جلب الإعدادات بناءً على مدرسة الموظف الحالية
+            const geoSettings = await attendanceService.getGeofencingSettings(employee.school_id);
+
+            if (geoSettings.enabled) {
+                // Determine target point
+                const targetPoint = type === 'in' ? geoSettings.checkIn : geoSettings.checkOut;
+
+                // 2. Calculate Distance
+                const distance = attendanceService.calculateDistance(
+                    currentLocation.coords.latitude,
+                    currentLocation.coords.longitude,
+                    targetPoint.lat,
+                    targetPoint.lon
+                );
+
+                // 3. Check if outside radius
+                if (distance > geoSettings.radius) {
+                    toast.error(`أنت خارج نطاق ${type === 'in' ? 'الحضور' : 'الانصراف'} المسموح به (${Math.round(distance)} متر).`);
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const today = new Date().toISOString().split('T')[0];
             const now = new Date().toTimeString().split(' ')[0];
 
             if (type === 'in') {
-                await supabase.from('employee_attendance').upsert({
-                    employee_id: employee.id,
-                    date: today,
-                    check_in_time: now,
-                    check_in_latitude: currentLocation.coords.latitude,
-                    check_in_longitude: currentLocation.coords.longitude,
-                    check_in_verified: true,
-                    status: 'حاضر',
-                }, { onConflict: 'employee_id,date' });
+                const targetPoint = geoSettings.checkIn;
+                await attendanceService.recordAttendance(
+                    employee.id,
+                    today,
+                    now,
+                    undefined,
+                    {
+                        check_in_latitude: currentLocation.coords.latitude,
+                        check_in_longitude: currentLocation.coords.longitude,
+                        check_in_verified: true,
+                        distance_from_school_meters: geoSettings.enabled ? attendanceService.calculateDistance(
+                            currentLocation.coords.latitude,
+                            currentLocation.coords.longitude,
+                            targetPoint.lat,
+                            targetPoint.lon
+                        ) : null
+                    }
+                );
 
                 toast.success('تم تسجيل الحضور بنجاح');
             } else {
-                await supabase.from('employee_attendance')
-                    .update({
-                        check_out_time: now,
+                const targetPoint = geoSettings.checkOut;
+                await attendanceService.recordAttendance(
+                    employee.id,
+                    today,
+                    undefined,
+                    now,
+                    {
                         check_out_latitude: currentLocation.coords.latitude,
                         check_out_longitude: currentLocation.coords.longitude,
                         check_out_verified: true,
-                    })
-                    .eq('employee_id', employee.id)
-                    .eq('date', today);
+                        distance_from_school_meters: geoSettings.enabled ? attendanceService.calculateDistance(
+                            currentLocation.coords.latitude,
+                            currentLocation.coords.longitude,
+                            targetPoint.lat,
+                            targetPoint.lon
+                        ) : null
+                    }
+                );
 
                 toast.success('تم تسجيل الانصراف بنجاح');
             }
