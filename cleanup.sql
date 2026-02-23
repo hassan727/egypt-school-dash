@@ -1,0 +1,1 @@
+TRUNCATE TABLE platform_notifications, platform_support_tickets, platform_payments, platform_audit_log RESTART IDENTITY CASCADE;
