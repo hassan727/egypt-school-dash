@@ -66,14 +66,22 @@ export default function UnifiedLoginPage() {
             return;
         }
 
-        // For staff/admin: Check if school is already set (auto-selected)
+        // 🟥 PLATFORM OWNER LOGIC:
+        // If user is admin (owner), go directly to Platform Level (Platform Dashboard)
+        // They don't need to select a school now. They manage schools from there.
+        if (user?.role === 'admin') {
+            navigate('/platform', { replace: true });
+            return;
+        }
+
+        // For staff/teachers: Check if school is already set (auto-selected)
         if (identity.school && identity.academicYear) {
             const from = (location.state as any)?.from?.pathname || '/dashboard';
             navigate(from, { replace: true });
             return;
         }
 
-        // Otherwise show selection step
+        // Otherwise show selection step (for users with multiple schools but no direct admin access)
         setStep('select');
     };
 
@@ -81,6 +89,8 @@ export default function UnifiedLoginPage() {
     if (isAuthenticated && step === 'login') {
         if (user?.role === 'student') {
             navigate('/student/dashboard', { replace: true });
+        } else if (user?.role === 'admin') {
+            navigate('/platform', { replace: true });
         } else if (identity.school && identity.academicYear) {
             const from = (location.state as any)?.from?.pathname || '/dashboard';
             navigate(from, { replace: true });

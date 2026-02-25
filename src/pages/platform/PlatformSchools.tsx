@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/lib/supabase';
-import { useSystem } from '@/context/SystemContext';
+import { useAppContext } from '@/context/AppContext';
 
 const statusColors: Record<string, string> = {
     trial: 'bg-amber-100 text-amber-700 border-amber-200',
@@ -54,7 +54,8 @@ export default function PlatformSchools() {
     });
     const { toast } = useToast();
     const navigate = useNavigate();
-    const { setSchool, setAcademicYear } = useSystem();
+    const { switchSchool, academicYear: currentYear } = useAppContext();
+    const { setAcademicYear } = useSystem(); // Still need this to set year in system state
 
     const reload = () => {
         setLoading(true);
@@ -108,7 +109,7 @@ export default function PlatformSchools() {
 
     const handleImpersonate = async (school: SchoolWithDetails) => {
         try {
-            setSchool({
+            switchSchool({
                 id: school.id,
                 school_name: school.school_name,
                 school_code: school.school_code,
@@ -118,7 +119,7 @@ export default function PlatformSchools() {
                 status: school.status,
             });
 
-            // Fetch the active academic year to prevent the IdentityGuard from bouncing us to Control Room
+            // Fetch the active academic year to prevent the IdentityGuard from bouncing us back
             const { data: years } = await supabase
                 .from('academic_years')
                 .select('year_code')
