@@ -138,12 +138,12 @@ export function IdentityBar() {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => navigate('/control-room')}
+                        onClick={() => navigate('/')}
                         className="text-white hover:bg-white/20 hover:text-white text-xs md:text-sm h-7 md:h-8 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
                     >
                         <Settings2 className="h-3 w-3 md:h-4 md:w-4 ml-1" />
-                        <span className="hidden sm:inline">تغيير الإعدادات</span>
-                        <span className="sm:hidden">إعدادات</span>
+                        <span className="hidden sm:inline">تغيير البيئة</span>
+                        <span className="sm:hidden">تغيير</span>
                     </Button>
                 </div>
             </div>

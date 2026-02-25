@@ -22,22 +22,34 @@ import {
     GraduationCap,
     School,
     User,
-    ShieldCheck
+    ShieldCheck,
+    Building2,
+    Calendar,
+    ArrowLeft,
+    CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useSystem } from '@/context/SystemContext';
 import { toast } from 'sonner';
 import { errorTrackingService } from '@/services/errorTrackingService';
 
 export default function UnifiedLoginPage() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { loginAsAdmin, loginAsStudent, isAuthenticated, user } = useAuth();
+    const { loginAsAdmin, loginAsStudent, isAuthenticated, user, logout } = useAuth();
+    const { schools, setSchool, setAcademicYear, identity } = useSystem();
 
     // State
     const [loginType, setLoginType] = useState<'staff' | 'student'>('staff');
+    const [step, setStep] = useState<'login' | 'select'>('login');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+
+    // Selection State
+    const [selectedSchoolId, setSelectedSchoolId] = useState('');
+    const [selectedYear, setSelectedYear] = useState('');
+    const [academicYears, setAcademicYears] = useState<any[]>([]);
 
     // Form Fields - Staff
     const [email, setEmail] = useState('');
@@ -47,15 +59,58 @@ export default function UnifiedLoginPage() {
     const [nationalId, setNationalId] = useState('');
     const [studentPassword, setStudentPassword] = useState('');
 
-    // Redirect if already authenticated
-    if (isAuthenticated) {
+    // Handle transition to selection or dashboard
+    const handleLoginSuccess = async (role: string) => {
+        if (role === 'student') {
+            navigate('/student/dashboard', { replace: true });
+            return;
+        }
+
+        // For staff/admin: Check if school is already set (auto-selected)
+        if (identity.school && identity.academicYear) {
+            const from = (location.state as any)?.from?.pathname || '/dashboard';
+            navigate(from, { replace: true });
+            return;
+        }
+
+        // Otherwise show selection step
+        setStep('select');
+    };
+
+    // Redirect if already authenticated and school is set
+    if (isAuthenticated && step === 'login') {
         if (user?.role === 'student') {
             navigate('/student/dashboard', { replace: true });
-        } else {
-            const from = (location.state as any)?.from?.pathname || '/control-room';
+        } else if (identity.school && identity.academicYear) {
+            const from = (location.state as any)?.from?.pathname || '/dashboard';
             navigate(from, { replace: true });
+        } else {
+            setStep('select');
         }
     }
+
+    // Fetch years when school changes
+    useEffect(() => {
+        const fetchYears = async () => {
+            if (!selectedSchoolId) return;
+            try {
+                const { data } = await supabase
+                    .from('academic_years')
+                    .select('*')
+                    .eq('school_id', selectedSchoolId)
+                    .order('year_code', { ascending: false });
+
+                setAcademicYears(data || []);
+                if (data && data.length > 0) {
+                    const active = data.find(y => y.is_active);
+                    setSelectedYear(active?.year_code || data[0].year_code);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        fetchYears();
+    }, [selectedSchoolId]);
 
     const handleStaffLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -70,7 +125,7 @@ export default function UnifiedLoginPage() {
             const result = await loginAsAdmin(email, password);
             if (result.success) {
                 toast.success('تم تسجيل الدخول بنجاح!');
-                navigate('/control-room', { replace: true });
+                handleLoginSuccess('admin');
             } else {
                 setError(result.error || 'الايميل او كلمة المرور غير صحيحة');
             }
@@ -94,7 +149,7 @@ export default function UnifiedLoginPage() {
             const result = await loginAsStudent(nationalId, studentPassword);
             if (result.success) {
                 toast.success('مرحباً بك يا بطل!');
-                navigate('/student/dashboard', { replace: true });
+                handleLoginSuccess('student');
             } else {
                 setError(result.error || 'بيانات الدخول غير صحيحة');
             }
@@ -117,7 +172,8 @@ export default function UnifiedLoginPage() {
                     <p className="text-muted-foreground mt-2">بوابة الدخول الموحدة لجميع المستخدمين</p>
                 </div>
 
-                <Card className="shadow-xl border-t-4 border-t-primary overflow-hidden">
+                <Card className="shadow-xl border-t-4 border-t-primary overflow-hidden bg-white">
+                    {step === 'login' ? (
                     <Tabs value={loginType} onValueChange={(v) => setLoginType(v as any)} className="w-full">
                         <TabsList className="w-full h-14 rounded-none bg-slate-100 p-1">
                             <TabsTrigger value="staff" className="w-1/2 h-full gap-2 text-base data-[state=active]:bg-white data-[state=active]:shadow-sm">
@@ -130,7 +186,7 @@ export default function UnifiedLoginPage() {
                             </TabsTrigger>
                         </TabsList>
 
-                        <CardContent className="pt-6">
+                        <CardContent className="pt-6 pb-8">
                             {error && (
                                 <Alert variant="destructive" className="mb-6">
                                     <AlertCircle className="h-4 w-4" />
@@ -233,6 +289,80 @@ export default function UnifiedLoginPage() {
                             </TabsContent>
                         </CardContent>
                     </Tabs>
+                    ) : (
+                        <CardContent className="pt-8 pb-8 space-y-6">
+                            <div className="text-center space-y-2 mb-4">
+                                <h2 className="text-2xl font-bold">تحديد بيئة العمل</h2>
+                                <p className="text-muted-foreground">اختر المدرسة والسنة الدراسية للمتابعة</p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4 text-primary" />
+                                        المدرسة
+                                    </Label>
+                                    <select
+                                        className="w-full h-12 rounded-md border border-input bg-background px-3 py-2"
+                                        value={selectedSchoolId}
+                                        onChange={(e) => setSelectedSchoolId(e.target.value)}
+                                    >
+                                        <option value="">اختر المدرسة...</option>
+                                        {schools.map(s => (
+                                            <option key={s.id} value={s.id}>{s.school_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-primary" />
+                                        السنة الدراسية
+                                    </Label>
+                                    <select
+                                        className="w-full h-12 rounded-md border border-input bg-background px-3 py-2"
+                                        value={selectedYear}
+                                        onChange={(e) => setSelectedYear(e.target.value)}
+                                        disabled={!selectedSchoolId}
+                                    >
+                                        <option value="">اختر السنة...</option>
+                                        {academicYears.map(y => (
+                                            <option key={y.year_code} value={y.year_code}>{y.year_code}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="pt-4 flex gap-3">
+                                    <Button
+                                        variant="outline"
+                                        className="flex-1 h-12"
+                                        onClick={() => {
+                                            logout();
+                                            setStep('login');
+                                        }}
+                                    >
+                                        <ArrowLeft className="ml-2 h-4 w-4" />
+                                        خروج
+                                    </Button>
+                                    <Button
+                                        className="flex-[2] h-12 text-lg"
+                                        disabled={!selectedSchoolId || !selectedYear}
+                                        onClick={() => {
+                                            const school = schools.find(s => s.id === selectedSchoolId);
+                                            if (school) {
+                                                setSchool(school);
+                                                setAcademicYear(selectedYear);
+                                                navigate('/dashboard');
+                                            }
+                                        }}
+                                    >
+                                        <CheckCircle2 className="ml-2 h-5 w-5" />
+                                        ابدأ العمل
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    )}
                 </Card>
 
                 <p className="text-center mt-8 text-sm text-muted-foreground">

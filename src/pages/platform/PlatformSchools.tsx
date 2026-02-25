@@ -143,12 +143,12 @@ export default function PlatformSchools() {
                     navigate('/dashboard');
                 } else {
                     toast({ title: 'تنبيه', description: 'هذه المدرسة لا تملك سنوات دراسية. يرجى إعدادها.' });
-                    navigate('/control-room');
+                    navigate('/');
                 }
             }
         } catch (error) {
             console.error(error);
-            navigate('/control-room');
+            navigate('/');
         }
     };
 
