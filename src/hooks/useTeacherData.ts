@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAppContext } from '@/context/AppContext';
 import {
     TeacherProfile,
     TeacherPersonalData,
@@ -28,6 +29,8 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
     const [teacherProfile, setTeacherProfile] = useState<TeacherProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { school } = useAppContext();
+    const schoolId = school?.id;
 
     const fetchTeacherData = async () => {
         if (!teacherId) {
@@ -45,6 +48,7 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
                 .from('employees')
                 .select('*')
                 .eq('employee_id', teacherId)
+                .eq('school_id', schoolId)
                 .maybeSingle();
 
             if (teacherError) {
@@ -62,6 +66,7 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
                 .from('salaries')
                 .select('*')
                 .eq('employee_id', teacherData.id)
+                .eq('school_id', schoolId)
                 .eq('academic_year_code', selectedYear)
                 .order('created_at', { ascending: false })
                 .limit(1)
@@ -94,6 +99,7 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
                 .from('employee_attendance')
                 .select('*')
                 .eq('employee_id', teacherData.id)
+                .eq('school_id', schoolId)
                 .order('date', { ascending: false })
                 .catch(() => ({ data: [] }));
 
@@ -323,10 +329,10 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
     };
 
     useEffect(() => {
-        if (teacherId) {
+        if (teacherId && schoolId) {
             fetchTeacherData();
         }
-    }, [teacherId, academicYear]);
+    }, [teacherId, academicYear, schoolId]);
 
     const updatePersonalData = async (data: Partial<TeacherPersonalData>) => {
         try {
@@ -351,7 +357,8 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
                     },
                     updated_at: new Date().toISOString(),
                 })
-                .eq('employee_id', teacherProfile.teacherId);
+                .eq('employee_id', teacherProfile.teacherId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 
@@ -381,7 +388,8 @@ export function useTeacherData(teacherId: string, academicYear?: string) {
                     },
                     updated_at: new Date().toISOString(),
                 })
-                .eq('employee_id', teacherProfile.teacherId);
+                .eq('employee_id', teacherProfile.teacherId)
+                .eq('school_id', schoolId);
 
             if (error) throw error;
 

@@ -5,8 +5,8 @@
  * 🔐 Security: All data access goes through this hook
  */
 
-import { useAuth, useIsDemoMode } from '@/context/AuthContext';
-import { useSystemSchoolId } from '@/context/SystemContext';
+import { useAppContext } from '@/context/AppContext';
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 // =============================================
@@ -28,9 +28,10 @@ const DEMO_SCHOOLS = [
 // =============================================
 
 export function useTenantStudents() {
-    const { isAuthenticated, validateTenantAccess, user } = useAuth();
-    const schoolId = useSystemSchoolId();
-    const isDemoMode = useIsDemoMode();
+    const { school, role, user, isLoading } = useAppContext();
+    const { validateTenantAccess, isAuthenticated } = useAuth();
+    const schoolId = school?.id;
+    const isDemoMode = role === 'demo';
 
     const fetchStudents = async () => {
         // Demo mode - fetch from DEMO school (real demo data in DB)
@@ -123,8 +124,9 @@ export function useTenantStudents() {
 // =============================================
 
 export function useTenantSchools() {
-    const { user, isAuthenticated } = useAuth();
-    const isDemoMode = useIsDemoMode();
+    const { user, role } = useAppContext();
+    const { isAuthenticated } = useAuth();
+    const isDemoMode = role === 'demo';
 
     const fetchSchools = async () => {
         // Demo mode
@@ -169,9 +171,10 @@ export function useTenantSchools() {
 // =============================================
 
 export function useTenantQuery<T = any>(tableName: string) {
-    const { isAuthenticated, validateTenantAccess, user } = useAuth();
-    const schoolId = useSystemSchoolId();
-    const isDemoMode = useIsDemoMode();
+    const { school, role, user } = useAppContext();
+    const { isAuthenticated, validateTenantAccess } = useAuth();
+    const schoolId = school?.id;
+    const isDemoMode = role === 'demo';
 
     const query = async (options?: {
         select?: string;

@@ -5,7 +5,7 @@
 
 import { ReactNode, useEffect } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useSystem } from '@/context/SystemContext';
+import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,7 +15,7 @@ interface IdentityGuardProps {
 }
 
 export function IdentityGuard({ children }: IdentityGuardProps) {
-    const { identity, isLoading } = useSystem();
+    const { school, level, role, isLoading } = useAppContext();
     const { session, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
@@ -64,14 +64,29 @@ export function IdentityGuard({ children }: IdentityGuardProps) {
         );
     }
 
-    // إذا لم يتم تحديد الهوية، وجه لغرفة التحكم
-    if (!identity.isReady) {
+    // إذا لم يتم تحديد الهوية (في مستوى المدرسة)، وجه لغرفة التحكم
+    // المالك في مستوى المنصة لا يحتاج لتحديد مدرسة
+    if (level === 'school' && !school && !isExempt) {
         return <Navigate to="/control-room" state={{ from: location }} replace />;
     }
 
-    // فحص انتهاء الاشتراك أو الفترة التجريبية
-    if (identity.isReady && location.pathname !== '/subscription/renew') {
-        const school = identity.school;
+    // حماية الصفحات التي تتطلب مدرسة
+    const schoolRequiredPaths = [
+        '/students',
+        '/teachers',
+        '/finance',
+        '/hr',
+        '/classes',
+        '/settings/stages-classes'
+    ];
+
+    const isSchoolPage = schoolRequiredPaths.some(path => location.pathname.startsWith(path));
+    if (isSchoolPage && !school) {
+        return <Navigate to="/control-room" state={{ from: location }} replace />;
+    }
+
+    // فحص انتهاء الاشتراك أو الفترة التجريبية (فقط لمستوى المدرسة)
+    if (school && location.pathname !== '/subscription/renew') {
         const status = school?.status || school?.settings?.status;
         const isTrial = school?.is_trial || school?.settings?.is_trial;
         const endDateStr = school?.trial_ends_at || school?.settings?.trial_ends_at;

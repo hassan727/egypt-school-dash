@@ -43,7 +43,7 @@ interface SystemContextType {
     isLoading: boolean;
 
     // Actions
-    setSchool: (school: School) => void;
+    setSchool: (school: School | null) => void;
     setAcademicYear: (year: string) => void;
     resetIdentity: () => void;
 
@@ -170,19 +170,28 @@ export function SystemProvider({ children }: { children: ReactNode }) {
 
     // Auto-select school from AuthContext if user has one assigned
     useEffect(() => {
-        if (user?.schoolId && schools.length > 0 && !selectedSchool) {
-            const found = schools.find(s => s.id === user.schoolId);
-            if (found) {
-                setSelectedSchool(found);
-                saveIdentity({ school: found });
+        // Only auto-select for non-admin users or if exactly one school exists
+        if (user && schools.length > 0 && !selectedSchool) {
+            // Case 1: User has a specific school assigned (Staff/Student)
+            if (user.schoolId) {
+                const found = schools.find(s => s.id === user.schoolId);
+                if (found) {
+                    setSelectedSchool(found);
+                    saveIdentity({ school: found });
+                }
+            }
+            // Case 2: Global Admin but only one school exists in the whole system
+            else if (user.role === 'admin' && schools.length === 1) {
+                setSelectedSchool(schools[0]);
+                saveIdentity({ school: schools[0] });
             }
         }
     }, [user, schools, selectedSchool]);
 
     // Actions
-    const setSchool = (school: School) => {
+    const setSchool = (school: School | null) => {
         setSelectedSchool(school);
-        saveIdentity({ school });
+        saveIdentity({ school: school as School });
     };
 
     const setAcademicYear = (year: string) => {

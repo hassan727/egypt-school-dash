@@ -4,24 +4,29 @@
  */
 
 import { useNavigate } from 'react-router-dom';
-import { useSystem } from '@/context/SystemContext';
+import { useAppContext } from '@/context/AppContext';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Building2, Calendar, Settings2 } from 'lucide-react';
+import { Building2, Calendar, Settings2, ShieldCheck, LogOut, LayoutDashboard } from 'lucide-react';
 
 export function IdentityBar() {
     const navigate = useNavigate();
-    const { identity } = useSystem();
-    const { user, session } = useAuth();
+    const { school, academicYear, user, level, role, isImpersonating, clearImpersonation } = useAppContext();
+    const { session } = useAuth();
 
-    // Check if the school is in trial mode (from DB column or settings fallback)
-    const isTrial = identity.school?.is_trial === true || identity.school?.settings?.is_trial === true;
+    // Check if the school is in trial mode
+    const isTrial = school?.is_trial === true || school?.settings?.is_trial === true;
 
-    // لا تظهر الشريط إذا لم يتم تحديد الهوية
-    if (!identity.isReady) return null;
+    // لا تظهر الشريط إذا لم يكن هناك مستخدم أو مدرسة (إلا في مستوى المنصة)
+    if (!user) return null;
+    if (level === 'school' && !school) return null;
 
     return (
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2 px-4 shadow-md sticky top-0 z-20">
+        <div className={`py-2 px-4 shadow-md sticky top-0 z-20 text-white ${
+            level === 'platform'
+            ? 'bg-slate-900 border-b border-slate-700'
+            : 'bg-gradient-to-r from-indigo-600 to-purple-600'
+        }`}>
             <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-2 md:gap-4 text-xs md:text-sm">
                 {/* Identity Info */}
                 <div className="flex items-center gap-2 md:gap-4 lg:gap-6 flex-wrap">
@@ -33,6 +38,22 @@ export function IdentityBar() {
                         </div>
                     )}
 
+                    {/* Impersonation Badge */}
+                    {isImpersonating && (
+                        <div className="bg-rose-500 text-white px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 animate-pulse">
+                            <ShieldCheck className="h-3 w-3" />
+                            <span>وضع المحاكاة ({role})</span>
+                        </div>
+                    )}
+
+                    {/* Platform Level Badge */}
+                    {level === 'platform' && (
+                        <div className="bg-blue-600 text-white px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1">
+                            <LayoutDashboard className="h-3 w-3" />
+                            <span>إدارة المنصة</span>
+                        </div>
+                    )}
+
                     {/* Trial Mode Badge */}
                     {isTrial && !session?.isDemoMode && (
                         <div className="bg-emerald-500 text-white px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1">
@@ -40,22 +61,27 @@ export function IdentityBar() {
                         </div>
                     )}
 
-                    {/* School */}
-                    <div className="flex items-center gap-1 md:gap-2">
-                        <Building2 className="h-3 w-3 md:h-4 md:w-4 text-white/70 hidden sm:block" />
-                        <span className="font-medium truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">
-                            {identity.school?.school_name}
-                        </span>
-                    </div>
+                    {/* School Content */}
+                    {school && (
+                        <>
+                            {/* School */}
+                            <div className="flex items-center gap-1 md:gap-2">
+                                <Building2 className="h-3 w-3 md:h-4 md:w-4 text-white/70 hidden sm:block" />
+                                <span className="font-medium truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">
+                                    {school.school_name}
+                                </span>
+                            </div>
 
-                    {/* Separator */}
-                    <div className="h-3 md:h-4 w-px bg-white/30 hidden sm:block" />
+                            {/* Separator */}
+                            <div className="h-3 md:h-4 w-px bg-white/30 hidden sm:block" />
 
-                    {/* Academic Year */}
-                    <div className="flex items-center gap-1 md:gap-2">
-                        <Calendar className="h-3 w-3 md:h-4 md:w-4 text-white/70 hidden sm:block" />
-                        <span className="font-medium whitespace-nowrap">{identity.academicYear}</span>
-                    </div>
+                            {/* Academic Year */}
+                            <div className="flex items-center gap-1 md:gap-2">
+                                <Calendar className="h-3 w-3 md:h-4 md:w-4 text-white/70 hidden sm:block" />
+                                <span className="font-medium whitespace-nowrap">{academicYear}</span>
+                            </div>
+                        </>
+                    )}
 
                     {/* Separator */}
                     <div className="h-3 md:h-4 w-px bg-white/30 hidden md:block" />
@@ -71,6 +97,33 @@ export function IdentityBar() {
 
                 {/* Right Side Buttons */}
                 <div className="flex items-center gap-2">
+                    {isImpersonating && (
+                        <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                                clearImpersonation();
+                                navigate('/platform');
+                            }}
+                            className="bg-rose-600 hover:bg-rose-700 text-xs h-7 md:h-8 px-2 md:px-3 flex items-center gap-1"
+                        >
+                            <LogOut className="h-3 w-3" />
+                            <span className="hidden sm:inline">إنهاء المحاكاة</span>
+                        </Button>
+                    )}
+
+                    {level === 'school' && user?.role === 'admin' && (
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => navigate('/platform')}
+                            className="bg-slate-700 hover:bg-slate-600 text-white text-xs h-7 md:h-8 px-2 md:px-3 flex items-center gap-1"
+                        >
+                            <LayoutDashboard className="h-3 w-3" />
+                            <span className="hidden sm:inline">لوحة التحكم العامة</span>
+                        </Button>
+                    )}
+
                     {session?.isDemoMode && (
                         <Button
                             variant="default"
@@ -81,6 +134,7 @@ export function IdentityBar() {
                             سجل مدرستك الآن
                         </Button>
                     )}
+
                     <Button
                         variant="ghost"
                         size="sm"
