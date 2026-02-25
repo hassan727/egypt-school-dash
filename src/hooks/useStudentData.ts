@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { StudentProfile, PersonalData, EnrollmentData, GuardianData, MotherData, AdministrativeData, EmergencyContact, SchoolFees, OtherExpense, FinancialTransaction, AttendanceRecord } from '@/types/student';
-import { useSystemSchoolId } from '@/context/SystemContext';
+import { useAppContext } from '@/context/AppContext';
 
 /**
  * Hook لجلب وتحديث بيانات الطالب من Supabase
@@ -11,7 +11,8 @@ export function useStudentData(studentId: string, academicYear?: string) {
     const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const schoolId = useSystemSchoolId();
+    const { school, user, role } = useAppContext();
+    const schoolId = school?.id;
 
     // جلب بيانات الطالب الكاملة
     useEffect(() => {
@@ -323,7 +324,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     student_id: studentId,
                     change_type: changeType,
                     changed_fields: changedFields,
-                    changed_by: 'current_user', // In real app, get from auth context
+                    changed_by: user?.email || user?.fullName || 'system',
                     created_at: new Date().toISOString()
                 });
 
@@ -795,7 +796,7 @@ export function useStudentData(studentId: string, academicYear?: string) {
                     payment_method: data.paymentMethod || 'نقدي',
                     transaction_date: data.transactionDate,
                     receipt_number: data.receiptNumber || '',
-                    created_by: data.createdBy || 'current_user',
+                    created_by: data.createdBy || user?.fullName || 'system',
                     payer_name: data.payerName || '',
                     payer_relation: data.payerRelation || '',
                     payer_phone: data.payerPhone || '',

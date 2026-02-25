@@ -17,10 +17,11 @@ import {
     CreateTransactionDTO,
     EmployeeLoan,
 } from '@/types/finance';
-import { useSystemSchoolId } from '@/context/SystemContext';
+import { useAppContext } from '@/context/AppContext';
 
 export function useFinanceData(academicYear?: string) {
-    const schoolId = useSystemSchoolId();
+    const { school, user } = useAppContext();
+    const schoolId = school?.id;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -516,7 +517,7 @@ export function useFinanceData(academicYear?: string) {
                     receipt_number: data.receiptNumber,
                     notes: data.notes,
                     school_id: schoolId, // Enforce School Identity
-                    created_by: 'current_user',
+                    created_by: user?.fullName || 'system',
                 })
                 .select()
                 .single();
@@ -566,7 +567,7 @@ export function useFinanceData(academicYear?: string) {
                     reference_id: salaryId,
                     payment_method: paymentMethod,
                     school_id: schoolId, // Enforce School Identity
-                    created_by: 'current_user',
+                    created_by: user?.fullName || 'system',
                 });
 
             if (txError) console.error('Warning: Could not add salary to transactions', txError);

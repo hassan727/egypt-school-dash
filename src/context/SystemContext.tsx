@@ -43,7 +43,7 @@ interface SystemContextType {
     isLoading: boolean;
 
     // Actions
-    setSchool: (school: School) => void;
+    setSchool: (school: School | null) => void;
     setAcademicYear: (year: string) => void;
     resetIdentity: () => void;
 
@@ -180,9 +180,9 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     }, [user, schools, selectedSchool]);
 
     // Actions
-    const setSchool = (school: School) => {
+    const setSchool = (school: School | null) => {
         setSelectedSchool(school);
-        saveIdentity({ school });
+        saveIdentity({ school: school as School });
     };
 
     const setAcademicYear = (year: string) => {

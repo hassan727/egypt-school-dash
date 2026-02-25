@@ -134,6 +134,7 @@ import { DemoModeBanner } from "@/components/auth/DemoModeBanner";
 
 // System Context - Central Control
 import { SystemProvider } from "@/context/SystemContext";
+import { AppProvider } from "@/context/AppContext";
 import { IdentityGuard } from "@/components/IdentityGuard";
 import { IdentityBar } from "@/components/IdentityBar";
 import { TrialNotification } from "@/components/TrialNotification";
@@ -192,10 +193,11 @@ const App = () => (
         <Sonner />
         <AuthProvider>
           <SystemProvider>
-            <GlobalFilterProvider>
-              <DemoModeBanner />
-              <BrowserRouter future={{ v7_relativeSplatPath: true }}>
-                <IdentityGuard>
+            <AppProvider>
+              <GlobalFilterProvider>
+                <DemoModeBanner />
+                <BrowserRouter future={{ v7_relativeSplatPath: true }}>
+                  <IdentityGuard>
                   <IdentityBar />
                   <TrialBanner />
                   <TrialNotification />
@@ -377,9 +379,10 @@ const App = () => (
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
-                </IdentityGuard>
-              </BrowserRouter>
-            </GlobalFilterProvider>
+                  </IdentityGuard>
+                </BrowserRouter>
+              </GlobalFilterProvider>
+            </AppProvider>
           </SystemProvider>
         </AuthProvider>
       </TooltipProvider>
