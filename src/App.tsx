@@ -108,10 +108,8 @@ import SchoolControl from "./pages/SchoolControl";
 import StudentAccountsPage from "./pages/students/settings/StudentAccountsPage";
 import StudentDataManagementPage from "./pages/students/settings/StudentDataManagementPage";
 import StudentImportPage from "./pages/students/settings/StudentImportPage";
-import StudentLoginPage from "./pages/auth/StudentLoginPage";
 import StudentPortalDashboard from "./pages/student/StudentPortalDashboard";
-import AdminLoginPage from "./pages/auth/AdminLoginPage";
-import UserLoginPage from "./pages/auth/UserLoginPage";
+import UnifiedLoginPage from "./pages/auth/UnifiedLoginPage";
 import TrialRegistrationPage from "./pages/auth/TrialRegistrationPage";
 import LandingGateway from "./pages/LandingGateway";
 import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
@@ -345,13 +343,13 @@ const App = () => (
                     <Route path="/students/settings/import" element={<StudentImportPage />} />
 
                     {/* Student Portal Routes (Public) */}
-                    <Route path="/student/login" element={<StudentLoginPage />} />
+                    <Route path="/student/login" element={<Navigate to="/login" replace />} />
                     <Route path="/student/dashboard" element={<StudentPortalDashboard />} />
 
-                    {/* Client & Staff Login */}
-                    <Route path="/login" element={<UserLoginPage />} />
+                    {/* Unified Login */}
+                    <Route path="/login" element={<UnifiedLoginPage />} />
                     {/* Super Admin / Developer Login & Dashboard */}
-                    <Route path="/admin-super" element={<AdminLoginPage />} />
+                    <Route path="/admin-super" element={<Navigate to="/login" replace />} />
                     <Route path="/admin-super/dashboard" element={<SuperAdminDashboard />} />
 
                     {/* Settings Routes */}

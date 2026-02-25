@@ -72,12 +72,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // For admin, it's the one selected in SystemContext.
     // For others, it's their assigned school.
     const currentSchool = useMemo(() => {
+        // If user is a student, their school is fixed
+        if (user?.role === 'student' && user.schoolId && identity.school?.id !== user.schoolId) {
+            // Auto-sync student school if not set
+            const studentSchool = identity.schools.find(s => s.id === user.schoolId);
+            if (studentSchool) {
+                // We can't call setSchool here directly as it's a render cycle,
+                // but SystemProvider already has an effect for this.
+                return studentSchool;
+            }
+        }
+
         if (user?.role === 'admin') {
             return identity.school;
         }
         // Fallback to identity school which should match user.schoolId via SystemContext logic
         return identity.school;
-    }, [user, identity.school]);
+    }, [user, identity.school, identity.schools]);
 
     // 3. Determine Level
     const level: AppLevel = useMemo(() => {
