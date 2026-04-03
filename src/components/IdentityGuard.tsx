@@ -33,7 +33,6 @@ export function IdentityGuard({ children }: IdentityGuardProps) {
 
     // الصفحات المستثناة من الحراسة
     const exemptPaths = [
-        '/control-room',
         '/login',
         '/student/login',
         '/student/dashboard',
@@ -42,10 +41,13 @@ export function IdentityGuard({ children }: IdentityGuardProps) {
         '/admin-super', // صفحة دخول المطور ولوحة التحكم الخاصة به
         '/subscription/renew', // صفحة تجديد الاشتراك
         '/platform', // لوحة تحكم مالك المنصة
-        '/' // البوابة الرئيسية
+        '/' // البوابة الرئيسية (صفحة تسجيل الدخول الموحدة)
     ];
 
-    const isExempt = exemptPaths.some(path => location.pathname.startsWith(path));
+    const isExempt = exemptPaths.some(path => {
+        if (path === '/') return location.pathname === '/';
+        return location.pathname.startsWith(path);
+    });
 
     // إذا كانت الصفحة مستثناة، اسمح بالمرور
     if (isExempt) {
@@ -64,10 +66,10 @@ export function IdentityGuard({ children }: IdentityGuardProps) {
         );
     }
 
-    // إذا لم يتم تحديد الهوية (في مستوى المدرسة)، وجه لغرفة التحكم
+    // إذا لم يتم تحديد الهوية (في مستوى المدرسة)، وجه للبوابة الرئيسية
     // المالك في مستوى المنصة لا يحتاج لتحديد مدرسة
     if (level === 'school' && !school && !isExempt) {
-        return <Navigate to="/control-room" state={{ from: location }} replace />;
+        return <Navigate to="/" state={{ from: location }} replace />;
     }
 
     // حماية الصفحات التي تتطلب مدرسة
@@ -82,7 +84,7 @@ export function IdentityGuard({ children }: IdentityGuardProps) {
 
     const isSchoolPage = schoolRequiredPaths.some(path => location.pathname.startsWith(path));
     if (isSchoolPage && !school) {
-        return <Navigate to="/control-room" state={{ from: location }} replace />;
+        return <Navigate to="/" state={{ from: location }} replace />;
     }
 
     // فحص انتهاء الاشتراك أو الفترة التجريبية (فقط لمستوى المدرسة)

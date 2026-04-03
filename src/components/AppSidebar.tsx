@@ -16,21 +16,50 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useState } from "react";
 
-import { useSchoolFeatures } from "@/context/SystemContext";
-import { useAuth } from "@/context/AuthContext";
+import { useAppContext } from "@/context/AppContext";
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const [openItems, setOpenItems] = useState<string[]>(["إدارة الطلاب"]);
-  const features = useSchoolFeatures();
-  const { user } = useAuth();
-  const isPlatformOwner = user?.role === 'admin';
+  const [openItems, setOpenItems] = useState<string[]>(["إدارة الطلاب", "إدارة المنصة"]);
+  const { features, level, user } = useAppContext();
+  const isPlatformLevel = level === 'platform';
 
-  const menuItems = [
+  // القائمة الخاصة بمستوى المنصة (للمالك فقط)
+  const platformMenuItems = [
     {
-      title: "الرئيسية",
+      title: "لوحة تحكم المنصة",
       icon: Home,
-      url: "/",
+      url: "/platform",
+      visible: true
+    },
+    {
+      title: "إدارة المدارس",
+      icon: Shield,
+      visible: true,
+      items: [
+        { title: "🏫 جميع المدارس", url: "/platform/schools" },
+        { title: "📦 الباقات والاشتراكات", url: "/platform/plans" },
+        { title: "🧩 التحكم في الخصائص", url: "/platform/features" },
+      ],
+    },
+    {
+      title: "مراقبة النظام",
+      icon: AlertCircle,
+      visible: true,
+      items: [
+        { title: "📡 حالة السيرفر", url: "/platform/monitoring" },
+        { title: "🔴 سجل الأخطاء", url: "/admin/error-monitoring" },
+        { title: "📋 سجل العمليات", url: "/platform/audit" },
+      ],
+    },
+  ];
+
+  // القائمة الخاصة بمستوى المدرسة (للموظفين والمالك أثناء التقمص)
+  const schoolMenuItems = [
+    {
+      title: "لوحة تحكم المدرسة",
+      icon: Home,
+      url: "/dashboard",
       visible: true,
       locked: false
     },
@@ -80,53 +109,11 @@ export function AppSidebar() {
         { title: "📁 المنتهية خدمتهم", url: "/hr/employees/terminated" },
         { title: "⏰ سجل البصمة", url: "/hr/attendance" },
         { title: "🔄 ضبط الورديات", url: "/hr/attendance/shifts" },
-        { title: "⚙️ إعدادات الحضور", url: "/hr/attendance/settings" },
         { title: "📊 تقارير الحضور", url: "/hr/attendance/reports" },
         { title: "🏖️ إدارة الإجازات", url: "/hr/leaves" },
-        { title: "✅ الموافقات", url: "/hr/leaves/approvals" },
         { title: "💰 رواتب HR", url: "/hr/payroll" },
-        { title: "📤 إرسال للمالية", url: "/hr/payroll/export" },
         { title: "📄 العقود", url: "/hr/contracts" },
-        { title: "⭐ تقييم الأداء", url: "/hr/performance" },
-        { title: "📚 التدريب", url: "/hr/training" },
-        { title: "⚠️ المخالفات والإنذارات", url: "/hr/violations" },
-        { title: "🚪 نهاية الخدمة", url: "/hr/offboarding" },
         { title: "📈 تقارير HR", url: "/hr/reports" },
-        { title: "⚙️ إعدادات HR", url: "/hr/settings" },
-      ],
-    },
-    {
-      title: "إعدادات الطلاب",
-      icon: UserCog,
-      visible: true,
-      locked: !features.students,
-      items: [
-        { title: "📋 بيانات الطلاب", url: "/students/settings/data" },
-        { title: "🔐 حسابات الطلاب", url: "/students/settings/accounts" },
-        { title: "📥 استيراد Excel", url: "/students/settings/import" },
-      ],
-    },
-    {
-      title: "مراقبة النظام",
-      icon: AlertCircle,
-      visible: isPlatformOwner,
-      locked: false,
-      items: [
-        { title: "🔴 مراقبة الأخطاء", url: "/admin/error-monitoring" },
-      ],
-    },
-    {
-      title: "إدارة المنصة",
-      icon: Shield,
-      visible: isPlatformOwner,
-      locked: false,
-      items: [
-        { title: "📊 لوحة التحكم", url: "/platform" },
-        { title: "🏫 إدارة المدارس", url: "/platform/schools" },
-        { title: "📦 إدارة الباقات", url: "/platform/plans" },
-        { title: "🧩 إدارة الخصائص", url: "/platform/features" },
-        { title: "📡 مراقبة النظام", url: "/platform/monitoring" },
-        { title: "📋 سجل العمليات", url: "/platform/audit" },
       ],
     },
     {
@@ -136,12 +123,12 @@ export function AppSidebar() {
       locked: false,
       items: [
         { title: "👥 إدارة المستخدمين", url: "/settings/users" },
-        { title: "🏫 إدارة المدارس", url: "/settings/schools" },
         { title: "📚 المراحل والفصول", url: "/settings/stages-classes" },
-        { title: "🔐 تسجيل الدخول", url: "/login" },
       ],
     },
   ];
+
+  const menuItems = isPlatformLevel ? platformMenuItems : schoolMenuItems;
 
   const toggleItem = (title: string) => {
     setOpenItems((prev) =>
@@ -154,7 +141,7 @@ export function AppSidebar() {
       <SidebarContent className="gap-0">
         <SidebarGroup>
           <SidebarGroupLabel className="text-lg font-bold px-4 py-6 text-sidebar-foreground">
-            {state === "collapsed" ? "إ" : "إدارة المدرسة"}
+            {state === "collapsed" ? (isPlatformLevel ? "م" : "إ") : (isPlatformLevel ? "إدارة المنصة" : "إدارة المدرسة")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

@@ -111,7 +111,6 @@ import StudentImportPage from "./pages/students/settings/StudentImportPage";
 import StudentPortalDashboard from "./pages/student/StudentPortalDashboard";
 import UnifiedLoginPage from "./pages/auth/UnifiedLoginPage";
 import TrialRegistrationPage from "./pages/auth/TrialRegistrationPage";
-import LandingGateway from "./pages/LandingGateway";
 import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
 import RenewSubscriptionPage from "./pages/subscription/RenewSubscriptionPage";
 
@@ -137,7 +136,6 @@ import { IdentityGuard } from "@/components/IdentityGuard";
 import { IdentityBar } from "@/components/IdentityBar";
 import { TrialNotification } from "@/components/TrialNotification";
 import { TrialBanner } from "@/components/TrialBanner";
-import ControlRoom from "./pages/ControlRoom";
 import UpgradeRequired from "./pages/UpgradeRequired";
 
 // HR - Human Resources System
@@ -200,12 +198,9 @@ const App = () => (
                   <TrialBanner />
                   <TrialNotification />
                   <Routes>
-                    {/* Control Room - Central Identity Setup */}
-                    <Route path="/control-room" element={<ControlRoom />} />
-
-                    <Route path="/" element={<LandingGateway />} />
+                    <Route path="/" element={<UnifiedLoginPage />} />
                     <Route path="/trial" element={<TrialRegistrationPage />} />
-                    <Route path="/guest" element={<LandingGateway />} />
+                    <Route path="/guest" element={<Navigate to="/" replace />} />
                     <Route path="/subscription/renew" element={<RenewSubscriptionPage />} />
                     <Route path="/dashboard" element={<Index />} />
 
@@ -346,10 +341,10 @@ const App = () => (
                     <Route path="/student/login" element={<Navigate to="/login" replace />} />
                     <Route path="/student/dashboard" element={<StudentPortalDashboard />} />
 
-                    {/* Unified Login */}
-                    <Route path="/login" element={<UnifiedLoginPage />} />
-                    {/* Super Admin / Developer Login & Dashboard */}
-                    <Route path="/admin-super" element={<Navigate to="/login" replace />} />
+                    {/* Redirects to Single Entry Point */}
+                    <Route path="/login" element={<Navigate to="/" replace />} />
+                    <Route path="/control-room" element={<Navigate to="/" replace />} />
+                    <Route path="/admin-super" element={<Navigate to="/" replace />} />
                     <Route path="/admin-super/dashboard" element={<SuperAdminDashboard />} />
 
                     {/* Settings Routes */}
